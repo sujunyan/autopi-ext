@@ -26,7 +26,7 @@ cansend vcan0 18F00400#0000001234000000
 sleep 2
 
 echo "Checking if main.py processed the message (look for output in the console where main.py is running or in its logs if redirected)."
-echo "You should see 'Parsed J1939 Data: {'Engine Speed': '1000.00 rpm'}' or similar in main.py's output."
+echo "You should see 'Parsed J1939 Data: {'Engine Speed': '1666.25 rpm'}' or similar in main.py's output."
 
 echo "Killing main.py..."
 kill $MAIN_PID

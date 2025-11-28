@@ -3,7 +3,7 @@ import csv
 import os
 
 class J1939Parser:
-    def __init__(self, parameter_db_path='j1939_parameters.csv'):
+    def __init__(self, parameter_db_path='j1939_database.csv'):
         self.parameter_db = self._load_parameter_db(parameter_db_path)
 
     def _load_parameter_db(self, parameter_db_path):

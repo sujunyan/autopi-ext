@@ -1,5 +1,0 @@
-PGN,SPN,Name,StartByte,StartBit,BitLength,Resolution,Offset,Unit
-61444,190,Engine Speed,3,0,16,0.125,0,rpm
-65265,84,Wheel-Based Vehicle Speed,0,0,16,0.00390625,0,km/h
-65265,163,Transmission Output Shaft Speed,2,0,16,0.125,0,rpm
-65265,164,Engine Percent Load At Current Speed,4,0,8,1,0,%
