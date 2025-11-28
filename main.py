@@ -2,6 +2,7 @@ import logging
 import time
 import can
 import j1939
+from j1939Parser import J1939Parser
 
 logging.getLogger('j1939').setLevel(logging.DEBUG)
 logging.getLogger('can').setLevel(logging.DEBUG)
@@ -38,6 +39,11 @@ def ca_receive(priority, pgn, source, timestamp, data):
         Data of the PDU
     """
     print("ts {} priority {} PGN {} source {} length {} data {}".format(timestamp, priority, pgn, source, len(data), data))
+    
+    # Instantiate the parser
+    parser = J1939Parser()
+    parsed_j1939_data = parser.parse_data(pgn, data)
+    print(f"Parsed J1939 Data: {parsed_j1939_data}")
 
 def ca_timer_callback1(cookie):
     """Callback for sending messages
@@ -72,32 +78,6 @@ def ca_timer_callback1(cookie):
     # returning true keeps the timer event active
     return True
 
-
-def ca_timer_callback2(cookie):
-    """Callback for sending messages
-
-    This callback is registered at the ECU timer event mechanism to be
-    executed every 500ms.
-
-    :param cookie:
-        A cookie registered at 'add_timer'. May be None.
-    """
-    # wait until we have our device_address
-    if ca.state != j1939.ControllerApplication.State.NORMAL:
-        # returning true keeps the timer event active
-        return True
-
-    # create data with 100 bytes
-    data = [j1939.ControllerApplication.FieldValue.NOT_AVAILABLE_8] * 100
-
-    # sending multipacket message with TP-BAM
-    ca.send_pgn(0, 0xFE, 0xF6, 6, data)
-
-    # sending multipacket message with TP-CMDT, destination address is 0x05
-    ca.send_pgn(0, 0xD0, 0x05, 6, data)
-
-    # returning true keeps the timer event active
-    return True
 
 def main():
     print("Initializing")
@@ -134,3 +114,6 @@ def main():
 
 if __name__ == '__main__':
     main()
+
+# Example Usage of J1939Parser (for testing purposes, can be removed later)
+
