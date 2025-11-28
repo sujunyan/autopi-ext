@@ -31,10 +31,12 @@ class J1939Parser:
         return db
 
     def parse_data(self, pgn, data):
+        parsed_values = {'code' : 0, 'pgn': pgn}
         if pgn not in self.parameter_db:
-            return f"PGN {pgn} not found in database."
+            parsed_values["msg"] = f"PGN {pgn} not found in database."
+            parsed_values['code'] = -1
+            return parsed_values
 
-        parsed_values = {}
         for spn, param_info in self.parameter_db[pgn].items():
             start_byte = param_info['StartByte']
             start_bit = param_info['StartBit']
@@ -71,7 +73,11 @@ class J1939Parser:
 
             # Apply resolution and offset
             physical_value = (raw_value * resolution) + offset
-            parsed_values[name] = f"{physical_value:.2f} {unit}"
+            # parsed_values[name] = f"{physical_value:.2f} {unit}"
+            parsed_values[name] = {
+                'value' : physical_value,
+                'unit' : unit
+            }
 
         return parsed_values
 

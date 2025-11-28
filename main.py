@@ -38,11 +38,12 @@ def ca_receive(priority, pgn, source, timestamp, data):
     :param bytearray data:
         Data of the PDU
     """
-    print("ts {} priority {} PGN {} source {} length {} data {}".format(timestamp, priority, pgn, source, len(data), data))
+    # print("ts {} priority {} PGN {} source {} length {} data {}".format(timestamp, priority, pgn, source, len(data), data))
     
     # Instantiate the parser
     parser = J1939Parser()
     parsed_j1939_data = parser.parse_data(pgn, data)
+    parsed_j1939_data['timestamp'] = timestamp
     print(f"Parsed J1939 Data: {parsed_j1939_data}")
 
 def ca_timer_callback1(cookie):
@@ -88,8 +89,8 @@ def main():
     # Connect to the CAN bus
     # Arguments are passed to python-can's can.interface.Bus() constructor
     # (see https://python-can.readthedocs.io/en/stable/bus.html).
-    # ecu.connect(bustype='socketcan', channel='can0')
-    ecu.connect(bustype='socketcan', channel='vcan0')
+    ecu.connect(bustype='socketcan', channel='can0')
+    # ecu.connect(bustype='socketcan', channel='vcan0')
     # ecu.connect(bustype='kvaser', channel=0, bitrate=250000)
     # ecu.connect(bustype='pcan', channel='PCAN_USBBUS1', bitrate=250000)
     # ecu.connect(bustype='ixxat', channel=0, bitrate=250000)
