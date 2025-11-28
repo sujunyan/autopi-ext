@@ -88,7 +88,8 @@ def main():
     # Connect to the CAN bus
     # Arguments are passed to python-can's can.interface.Bus() constructor
     # (see https://python-can.readthedocs.io/en/stable/bus.html).
-    ecu.connect(bustype='socketcan', channel='can0')
+    # ecu.connect(bustype='socketcan', channel='can0')
+    ecu.connect(bustype='socketcan', channel='vcan0')
     # ecu.connect(bustype='kvaser', channel=0, bitrate=250000)
     # ecu.connect(bustype='pcan', channel='PCAN_USBBUS1', bitrate=250000)
     # ecu.connect(bustype='ixxat', channel=0, bitrate=250000)
