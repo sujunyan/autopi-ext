@@ -44,39 +44,31 @@ def ca_receive(priority, pgn, source, timestamp, data):
     parser = J1939Parser()
     parsed_j1939_data = parser.parse_data(pgn, data)
     parsed_j1939_data['timestamp'] = timestamp
+    # if parsed_j1939_data['code'] == 0:
     print(f"Parsed J1939 Data: {parsed_j1939_data}")
 
-def ca_timer_callback1(cookie):
-    """Callback for sending messages
 
-    This callback is registered at the ECU timer event mechanism to be
-    executed every 500ms.
+def request_pgn(cookie, pgn):
+    """
+    Given the pgn, generate a function that send the requests of such pgn.
 
-    :param cookie:
-        A cookie registered at 'add_timer'. May be None.
+    Used to easily create new callback functions
     """
     # wait until we have our device_address
     if ca.state != j1939.ControllerApplication.State.NORMAL:
         # returning true keeps the timer event active
         return True
 
+    print(f"Timer with pgn {pgn}")
+
     # def send_request(self, data_page, pgn, destination):
 
     # create data with 8 bytes
     data = [j1939.ControllerApplication.FieldValue.NOT_AVAILABLE_8] * 8
 
-    data_page = 0
-    pgn = 61444 # EEC1, engine related
     destination = 0x00 # address for engine.
-    
+    data_page = 0
     ca.send_request(data_page, pgn, destination)
-    # sending normal broadcast message
-    # ca.send_pgn(0, 0xFD, 0xED, 6, data)
-
-    # sending normal peer-to-peer message, destintion address is 0x04
-    # ca.send_pgn(0, 0xE0, 0x04, 6, data)
-
-    # returning true keeps the timer event active
     return True
 
 
@@ -102,13 +94,33 @@ def main():
     ecu.add_ca(controller_application=ca)
     ca.subscribe(ca_receive)
     # callback every 0.5s
-    ca.add_timer(0.500, ca_timer_callback1)
+
+    time_pgn_vec = [
+        (0.500, 61444) 
+    ]
+
+
+    # 65265: to get the wheel based vehicle speed
+    # ca.add_timer(0.500, lambda cookie : request_pgn(cookie, 65265) )
+
+    # 61444: ECC1, we can get the engine information like engine speed...
+    # ca.add_timer(0.500, lambda cookie : request_pgn(cookie, 61444) )
+
+    # 65256: to get the pitch/altitude information
+    # ca.add_timer(0.500, lambda cookie : request_pgn(cookie, 65256) )
+
+    # 65266: to get the fuel rate information
+    # ca.add_timer(0.500, lambda cookie : request_pgn(cookie, 65266) )
+    
+    # 65217: to get the Trip fuel information
+    # ca.add_timer(0.500, lambda cookie : request_pgn(cookie, 65217) )
+
     # callback every 5s
     # ca.add_timer(5, ca_timer_callback2)
     # by starting the CA it starts the address claiming procedure on the bus
     ca.start()
 
-    time.sleep(6)
+    time.sleep(100)
 
     print("Deinitializing")
     ca.stop()

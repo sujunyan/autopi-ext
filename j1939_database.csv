@@ -7,5 +7,18 @@ PGN,SPN,Name,StartByte,StartBit,BitLength,Resolution,Offset,Unit
 61444,1675,Engine Starter Mode,6,0,4,1,0,-
 61444,2432,Engine Demand - Percent Torque,7,0,8,1,-125,%
 65265,84,Wheel-Based Vehicle Speed,0,0,16,0.00390625,0,km/h
-65265,163,Transmission Output Shaft Speed,2,0,16,0.125,0,rpm
-65265,164,Engine Percent Load At Current Speed,4,0,8,1,0,%
+65266,183,Fuel Rate (Liquid),0,0,16,0.05,0,L/h
+65266,184,Instantaneous Fuel Economy,2,0,16,0.001953125,0,km/kg
+65266,185,Average Fuel Economy,4,0,16,0.001953125,0,km/kg
+65199,1039,Trip Fuel (Gaseous),0,0,32,0.5,0,kg
+65199,1040,Total Fuel Used (Gaseous),4,0,32,0.5,0,kg
+65257,182,Trip Fuel (Liquid),0,0,32,0.5,0,L
+65257,250,Total Fuel Used (Liquid),4,0,32,0.5,0,L
+65217,917,High Resolution Total Vehicle Distance,0,0,32,5,0,m
+65217,918,High Resolution Trip Distance,4,0,32,5,0,m
+65256,517,Navigation-Based Vehicle Speed,2,0,16,0.00390625,0,km/h
+65256,583,Pitch,4,0,16,0.0078125,-200,deg
+65256,580,Altitude,6,0,16,0.125,-2500,m
+
+
+
