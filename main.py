@@ -2,31 +2,12 @@ import logging
 import time
 import can
 import j1939
-from j1939Parser import J1939Parser, logger
-
-# Configure logging for the main script
-# logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-logger = logging.getLogger('j1939_parser')
+from j1939Parser import J1939Parser
+from logger import config_logger, logger
 
 # Configure logging for j1939 and can libraries
 logging.getLogger('j1939').setLevel(logging.DEBUG)
 logging.getLogger('can').setLevel(logging.DEBUG)
-
-# compose the name descriptor for the new ca
-name = j1939.Name(
-    arbitrary_address_capable=0,
-    industry_group=j1939.Name.IndustryGroup.Industrial,
-    vehicle_system_instance=1,
-    vehicle_system=1,
-    function=1,
-    function_instance=1,
-    ecu_instance=1,
-    manufacturer_code=666,
-    identity_number=1234567
-    )
-
-# create the ControllerApplications
-ca = j1939.ControllerApplication(name, 128)
 
 
 def ca_receive(priority, pgn, source, timestamp, data):
@@ -53,7 +34,7 @@ def ca_receive(priority, pgn, source, timestamp, data):
     logger.info(f"Parsed J1939 Data: {parsed_j1939_data}")
 
 
-def request_pgn(cookie, pgn):
+def request_pgn(cookie, pgn, ca):
     """
     Given the pgn, generate a function that send the requests of such pgn.
 
@@ -76,70 +57,89 @@ def request_pgn(cookie, pgn):
     ca.send_request(data_page, pgn, destination)
     return True
 
+def setup_can_interface():
+    cmd = "sudo ip link set can0 down && sudo ip link set can0 up type can bitrate 250000"
+
 
 def main():
+    config_logger(logging.DEBUG)
+
     logger.info("Initializing J1939 Controller Application")
 
-    # create the ElectronicControlUnit (one ECU can hold multiple ControllerApplications)
-    ecu = j1939.ElectronicControlUnit()
+    # compose the name descriptor for the new ca
+    name = j1939.Name(
+        arbitrary_address_capable=0,
+        industry_group=j1939.Name.IndustryGroup.Industrial,
+        vehicle_system_instance=1,
+        vehicle_system=1,
+        function=1,
+        function_instance=1,
+        ecu_instance=1,
+        manufacturer_code=666,
+        identity_number=1234567
+        )
+    error_cnt = 0
+    max_error_cnt = 10
 
-    # Connect to the CAN bus
-    # Arguments are passed to python-can's can.interface.Bus() constructor
-    # (see https://python-can.readthedocs.io/en/stable/bus.html).
-    ecu.connect(bustype='socketcan', channel='can0')
-    # ecu.connect(bustype='socketcan', channel='vcan0')
-    # ecu.connect(bustype='kvaser', channel=0, bitrate=250000)
-    # ecu.connect(bustype='pcan', channel='PCAN_USBBUS1', bitrate=250000)
-    # ecu.connect(bustype='ixxat', channel=0, bitrate=250000)
-    # ecu.connect(bustype='vector', app_name='CANalyzer', channel=0, bitrate=250000)
-    # ecu.connect(bustype='nican', channel='CAN0', bitrate=250000)
-    # ecu.connect('testchannel_1', bustype='virtual')
+    while True:
+        ecu = None
+        ca = None
+        if error_cnt > 0:
+            if error_cnt >= max_error_cnt:
+                logger.error("Maximum error count reached. Exiting application.")
+                break
+            logger.debug(f"Restarting J1939 Controller Application (error count: {error_cnt})")
+        try:
+            logger.info("Attempting to connect to CAN bus...")
+            # create the ElectronicControlUnit (one ECU can hold multiple ControllerApplications)
+            ecu = j1939.ElectronicControlUnit()
+            # create the ControllerApplications
+            ca = j1939.ControllerApplication(name, 128)
 
-    # add CA to the ECU
-    ecu.add_ca(controller_application=ca)
-    ca.subscribe(ca_receive)
-    # callback every 0.5s
+            # Connect to the CAN bus
+            ecu.connect(bustype='socketcan', channel='can0')
+            # add CA to the ECU
+            ecu.add_ca(controller_application=ca)
+            ca.subscribe(ca_receive)
 
-    # time_pgn_vec is a list of tuples, where each tuple contains:
-    # - The time interval (in seconds) at which to request the PGN.
-    # - The Parameter Group Number (PGN) to request.
-    time_pgn_vec = [
-        (0.500, 61444), # Example: Electronic Control Unit 1 (EEC1) - Contains engine speed, torque, etc.
-        (0.600, 65265), # Example: to get the wheel based vehicle speed
-        (0.700, 65256), # Example: to get the pitch/altitude/GPS information
-        (4.00, 65266),  # Example: to get the fuel rate information
-        (5.00, 65217)   # Example: to get the Trip fuel information
-    ]
+            time_pgn_vec = [
+                (0.500, 61444),
+                (0.600, 65265),
+                (0.700, 65256),
+                (4.00, 65266),
+                (5.00, 65217)
+            ]
 
-    for time_interval, pgn in time_pgn_vec:
-        ca.add_timer(time_interval, lambda cookie, pgn=pgn: request_pgn(cookie, pgn))
+            for time_interval, pgn in time_pgn_vec:
+                ca.add_timer(time_interval, lambda cookie, pgn=pgn: request_pgn(cookie, pgn, ca))
+
+            ca.start()
+            logger.info("J1939 Controller Application started and connected.")
+
+            while ca is not None and ca.state != j1939.ControllerApplication.State.STOPPED:
+                time.sleep(1)  # Keep the main thread alive
+
+        except can.exceptions.CanError as e:
+            logger.error(f"CAN bus error: {e}", exc_info=True)
+            error_cnt += 1
+            logger.info("Retrying connection in 5 seconds...")
+            time.sleep(5)
+        except KeyboardInterrupt:
+            logger.info("J1939 Controller Application stopped by user.")
+            break
+        except Exception as e:
+            logger.error(f"An unexpected error occurred: {e}", exc_info=True)
+            logger.info("Restarting J1939 Controller Application in 5 seconds...")
+            error_cnt += 1
+            time.sleep(5)
+        finally:
+            if ca is not None and ca.state != j1939.ControllerApplication.State.STOPPED:
+                ca.stop()
+            if ecu is not None and ecu.is_connected:
+                ecu.disconnect()
+            logger.info("J1939 Controller Application deinitialized.")
 
 
-    # 65265: to get the wheel based vehicle speed
-    # ca.add_timer(0.500, lambda cookie : request_pgn(cookie, 65265) )
-
-    # 61444: ECC1, we can get the engine information like engine speed...
-    # ca.add_timer(0.500, lambda cookie : request_pgn(cookie, 61444) )
-
-    # 65256: to get the pitch/altitude information
-    # ca.add_timer(0.500, lambda cookie : request_pgn(cookie, 65256) )
-
-    # 65266: to get the fuel rate information
-    # ca.add_timer(0.500, lambda cookie : request_pgn(cookie, 65266) )
-    
-    # 65217: to get the Trip fuel information
-    # ca.add_timer(0.500, lambda cookie : request_pgn(cookie, 65217) )
-
-    # callback every 5s
-    # ca.add_timer(5, ca_timer_callback2)
-    # by starting the CA it starts the address claiming procedure on the bus
-    ca.start()
-
-    time.sleep(100)
-
-    logger.info("Deinitializing J1939 Controller Application")
-    ca.stop()
-    ecu.disconnect()
 
 if __name__ == '__main__':
     main()
