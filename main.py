@@ -3,6 +3,7 @@ import time
 import can
 import j1939
 from j1939Parser import J1939Parser
+import subprocess
 from logger import config_logger, logger
 
 # Configure logging for j1939 and can libraries
@@ -58,8 +59,34 @@ def request_pgn(cookie, pgn, ca):
     return True
 
 def setup_can_interface():
-    cmd = "sudo ip link set can0 down && sudo ip link set can0 up type can bitrate 250000"
+    """
+    Set up the CAN interface 'can0' with a bitrate of 250000. 
+    
+    Note that if we want to be compatible with ISO small car OBD-II protocol, we might need to add a function to automatically detect the OBD protocol. But for now, let's focus on heavy vehicles using J1939 over CAN.
+    """
 
+    cmd = "sudo ip link set can0 down && sudo ip link set can0 up type can bitrate 250000"
+    try:
+        logger.info("Setting up CAN interface...")
+        result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+        
+        if result.returncode == 0:
+            logger.info("CAN interface setup successfully.")
+            return True
+        else:
+            error_message = result.stderr.lower()
+            if "does not exist" in error_message:
+                logger.error("Error: CAN interface 'can0' does not exist.")
+            elif "device is down" in error_message:
+                logger.error("Error: CAN interface 'can0' is down.")
+            elif "is up" in error_message:
+                logger.warning("Warning: CAN interface 'can0' is already up.")
+            else:
+                logger.error(f"Failed to set up CAN interface: {result.stderr}")
+            return False
+    except Exception as e:
+        logger.exception(f"An unexpected error occurred while setting up CAN interface: {e}")
+        return False
 
 def main():
     config_logger(logging.DEBUG)
@@ -90,6 +117,7 @@ def main():
                 break
             logger.debug(f"Restarting J1939 Controller Application (error count: {error_cnt})")
         try:
+            setup_can_interface()
             logger.info("Attempting to connect to CAN bus...")
             # create the ElectronicControlUnit (one ECU can hold multiple ControllerApplications)
             ecu = j1939.ElectronicControlUnit()
