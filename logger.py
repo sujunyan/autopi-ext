@@ -16,7 +16,7 @@ def config_logger(level=logging.INFO):
 
     rotate_handler = logging.handlers.RotatingFileHandler(
         log_filepath,
-        maxBytes=1024 * 1024,  # 1 MB
+        maxBytes= 10 * 1024 * 1024,  # 1 MB
         backupCount=5          # Keep 5 historical log files
     )
     formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')

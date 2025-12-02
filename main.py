@@ -32,7 +32,7 @@ def ca_receive(priority, pgn, source, timestamp, data):
     parsed_j1939_data = parser.parse_data(pgn, data)
     parsed_j1939_data['timestamp'] = timestamp
     # if parsed_j1939_data['code'] == 0:
-    logger.info(f"Parsed J1939 Data: {parsed_j1939_data}")
+    logger.debug(f"Parsed J1939 Data: {parsed_j1939_data}")
 
 
 def request_pgn(cookie, pgn, ca):
@@ -51,11 +51,21 @@ def request_pgn(cookie, pgn, ca):
     # def send_request(self, data_page, pgn, destination):
 
     # create data with 8 bytes
-    data = [j1939.ControllerApplication.FieldValue.NOT_AVAILABLE_8] * 8
+    # data = [j1939.ControllerApplication.FieldValue.NOT_AVAILABLE_8] * 8
+
+    ## Note that in default ca.send_request function, the data length 3 instead of 8. We need to mannually send the raw data
+    ## see also the function defined in controller_application.py:280
+    data = [(pgn & 0xFF), ((pgn >> 8) & 0xFF), ((pgn >> 16) & 0xFF), 0x00, 0x00, 0x00, 0x00, 0x00]
 
     destination = 0x00 # address for engine.
     data_page = 0
-    ca.send_request(data_page, pgn, destination)
+    # ca.send_request(data_page, pgn, destination)
+    source_address = ca._device_address
+    ca.send_pgn(data_page, 
+            (j1939.ParameterGroupNumber.PGN.REQUEST >> 8) & 0xFF, 
+            destination & 0xFF, 
+            6, 
+            data)
     return True
 
 def setup_can_interface():
@@ -122,7 +132,7 @@ def main():
             # create the ElectronicControlUnit (one ECU can hold multiple ControllerApplications)
             ecu = j1939.ElectronicControlUnit()
             # create the ControllerApplications
-            ca = j1939.ControllerApplication(name, 128)
+            ca = j1939.ControllerApplication(name, 0xF9)
 
             # Connect to the CAN bus
             ecu.connect(bustype='socketcan', channel='can0')
@@ -130,12 +140,14 @@ def main():
             ecu.add_ca(controller_application=ca)
             ca.subscribe(ca_receive)
 
+            # 
             time_pgn_vec = [
-                (0.500, 61444),
-                (0.600, 65265),
-                (0.700, 65256),
-                (4.00, 65266),
-                (5.00, 65217)
+                (1.00, 61444), 
+                (1.10, 65262),
+                (1.00, 65265),
+                (1.20, 65256),
+                (1.30, 65266),
+                (1.40, 65217)
             ]
 
             for time_interval, pgn in time_pgn_vec:
@@ -144,7 +156,7 @@ def main():
             ca.start()
             logger.info("J1939 Controller Application started and connected.")
 
-            while ca is not None and ca.state != j1939.ControllerApplication.State.STOPPED:
+            while ca is not None:
                 time.sleep(1)  # Keep the main thread alive
 
         except can.exceptions.CanError as e:
@@ -161,9 +173,9 @@ def main():
             error_cnt += 1
             time.sleep(5)
         finally:
-            if ca is not None and ca.state != j1939.ControllerApplication.State.STOPPED:
+            if ca is not None:
                 ca.stop()
-            if ecu is not None and ecu.is_connected:
+            if ecu is not None:
                 ecu.disconnect()
             logger.info("J1939 Controller Application deinitialized.")
 
