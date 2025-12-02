@@ -1,6 +1,10 @@
 
 import csv
 import os
+import logging
+
+
+
 
 class J1939Parser:
     def __init__(self, parameter_db_path='j1939_database.csv'):
@@ -9,7 +13,7 @@ class J1939Parser:
     def _load_parameter_db(self, parameter_db_path):
         db = {}
         if not os.path.exists(parameter_db_path):
-            print(f"Error: Parameter database file not found at {parameter_db_path}")
+            logger.error(f"Parameter database file not found at {parameter_db_path}")
             return db
 
         with open(parameter_db_path, mode='r', encoding='utf-8') as file:
@@ -91,11 +95,11 @@ if __name__ == "__main__":
     # 1000 / 0.125 = 8000. 8000 in hex is 0x1F40. Little endian: 0x40, 0x1F
     # So, data[3] = 0x40, data[4] = 0x1F
     engine_speed_data = bytearray([0x00, 0x00, 0x00, 0x40, 0x1F, 0x00, 0x00, 0x00])
-    print(f"\n--- J1939Parser Example --- ")
-    print(f"Parsing PGN 61444 with data: {engine_speed_data.hex()}")
+    logger.info(f"\n--- J1939Parser Example --- ")
+    logger.info(f"Parsing PGN 61444 with data: {engine_speed_data.hex()}")
     result_engine_speed = parser.parse_data(61444, engine_speed_data)
-    print(f"Result: {result_engine_speed}")
-    print("-" * 30)
+    logger.info(f"Result: {result_engine_speed}")
+    logger.info("-" * 30)
 
     # Example 2: Wheel-Based Vehicle Speed (PGN 65265, SPN 84)
     # Let's assume vehicle speed is 60 km/h.
@@ -103,16 +107,16 @@ if __name__ == "__main__":
     # Raw value 15360 in 16 bits (little endian) is 0x00, 0x3C
     # So, data[0] = 0x00, data[1] = 0x3C
     vehicle_speed_data = bytearray([0x00, 0x3C, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])
-    print(f"Parsing PGN 65265 with data: {vehicle_speed_data.hex()}")
+    logger.info(f"Parsing PGN 65265 with data: {vehicle_speed_data.hex()}")
     result_vehicle_speed = parser.parse_data(65265, vehicle_speed_data)
-    print(f"Result: {result_vehicle_speed}")
-    print("-" * 30)
+    logger.info(f"Result: {result_vehicle_speed}")
+    logger.info("-" * 30)
 
     # Example 3: PGN not in database
-    print("Parsing PGN 12345 (not in database)")
+    logger.info("Parsing PGN 12345 (not in database)")
     result_not_found = parser.parse_data(12345, bytearray([0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]))
-    print(f"Result: {result_not_found}")
-    print("-" * 30)
+    logger.info(f"Result: {result_not_found}")
+    logger.info("-" * 30)
 
     # Example 4: Engine Percent Load At Current Speed (PGN 65265, SPN 164)
     # Let's assume engine load is 75%.
@@ -120,7 +124,7 @@ if __name__ == "__main__":
     # Raw value 75 in 8 bits is 0x4B
     # So, data[4] = 0x4B
     engine_load_data = bytearray([0x00, 0x00, 0x00, 0x00, 0x4B, 0x00, 0x00, 0x00])
-    print(f"Parsing PGN 65265 with engine load data: {engine_load_data.hex()}")
+    logger.info(f"Parsing PGN 65265 with engine load data: {engine_load_data.hex()}")
     result_engine_load = parser.parse_data(65265, engine_load_data)
-    print(f"Result: {result_engine_load}")
-    print("-" * 30)
+    logger.info(f"Result: {result_engine_load}")
+    logger.info("-" * 30)

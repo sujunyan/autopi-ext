@@ -2,8 +2,13 @@ import logging
 import time
 import can
 import j1939
-from j1939Parser import J1939Parser
+from j1939Parser import J1939Parser, logger
 
+# Configure logging for the main script
+# logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+logger = logging.getLogger('j1939_parser')
+
+# Configure logging for j1939 and can libraries
 logging.getLogger('j1939').setLevel(logging.DEBUG)
 logging.getLogger('can').setLevel(logging.DEBUG)
 
@@ -45,7 +50,7 @@ def ca_receive(priority, pgn, source, timestamp, data):
     parsed_j1939_data = parser.parse_data(pgn, data)
     parsed_j1939_data['timestamp'] = timestamp
     # if parsed_j1939_data['code'] == 0:
-    print(f"Parsed J1939 Data: {parsed_j1939_data}")
+    logger.info(f"Parsed J1939 Data: {parsed_j1939_data}")
 
 
 def request_pgn(cookie, pgn):
@@ -59,7 +64,7 @@ def request_pgn(cookie, pgn):
         # returning true keeps the timer event active
         return True
 
-    print(f"Timer with pgn {pgn}")
+    logger.debug(f"Timer with pgn {pgn}")
 
     # def send_request(self, data_page, pgn, destination):
 
@@ -73,7 +78,7 @@ def request_pgn(cookie, pgn):
 
 
 def main():
-    print("Initializing")
+    logger.info("Initializing J1939 Controller Application")
 
     # create the ElectronicControlUnit (one ECU can hold multiple ControllerApplications)
     ecu = j1939.ElectronicControlUnit()
@@ -95,9 +100,19 @@ def main():
     ca.subscribe(ca_receive)
     # callback every 0.5s
 
+    # time_pgn_vec is a list of tuples, where each tuple contains:
+    # - The time interval (in seconds) at which to request the PGN.
+    # - The Parameter Group Number (PGN) to request.
     time_pgn_vec = [
-        (0.500, 61444) 
+        (0.500, 61444), # Example: Electronic Control Unit 1 (EEC1) - Contains engine speed, torque, etc.
+        (0.600, 65265), # Example: to get the wheel based vehicle speed
+        (0.700, 65256), # Example: to get the pitch/altitude/GPS information
+        (4.00, 65266),  # Example: to get the fuel rate information
+        (5.00, 65217)   # Example: to get the Trip fuel information
     ]
+
+    for time_interval, pgn in time_pgn_vec:
+        ca.add_timer(time_interval, lambda cookie, pgn=pgn: request_pgn(cookie, pgn))
 
 
     # 65265: to get the wheel based vehicle speed
@@ -122,7 +137,7 @@ def main():
 
     time.sleep(100)
 
-    print("Deinitializing")
+    logger.info("Deinitializing J1939 Controller Application")
     ca.stop()
     ecu.disconnect()
 
