@@ -72,7 +72,7 @@ class J1939Listener:
                 if interval > 0 and (time.time() - last_ts) >= interval:
                     self.request_pgn(pgn)
                     time.sleep(0.1)
-            pass
+            logger.debug(f"Current data {self.current_data}")
 
         logger.info("J1939Listener main loop has exited.")
     
@@ -157,22 +157,8 @@ class J1939Listener:
         parsed_j1939_data['timestamp'] = timestamp
         # if parsed_j1939_data['code'] == 0:
         self.current_data[pgn] = parsed_j1939_data
-        logger.debug(f"Parsed J1939 Data: {parsed_j1939_data}")
+        # logger.debug(f"Parsed J1939 Data: {parsed_j1939_data}")
     
-
-    def send_periodic_requests(self, time_pgn_vec):
-        """
-        Periodically send requests for specific PGNs.
-        """
-        def request_loop():
-            while self.running:
-                for interval, pgn in time_pgn_vec:
-                    self.ca.request_parameter_group(pgn)
-                    logger.info(f"Sent request for PGN: {pgn}")
-                    time.sleep(interval)
-
-        self.running = True
-        threading.Thread(target=request_loop, daemon=True).start()
 
     def close(self):
         """
