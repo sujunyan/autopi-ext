@@ -3,7 +3,7 @@ import csv
 import os
 import logging
 
-logger = logging.getLogger("j1939_parser")
+logger = logging.getLogger("j1939_listener")
 
 
 class J1939Parser:
