@@ -48,6 +48,14 @@ class J1939Listener:
 
         self.ca.start()
         self.enable = True
+
+        self.available_pgns = set()
+        self.all_pgns = self.parser.all_pgns
+
+        ## store the current data with the format pgn: data
+        self.current_data = {}
+
+
         logger.info("J1939Listener setup complete.")
 
     def main_loop(self):
@@ -56,28 +64,76 @@ class J1939Listener:
         """
         if not self.enable:
             logger.error("J1939Listener is not enabled. Please run setup() first.")
-        pass
+        
+        self.scan_pgns()
+        while self.enable:
+            for pgn in self.available_pgns:
+                interval = self.pgn2time_interval(pgn)
+                last_ts = self.current_data.get(pgn, {}).get('timestamp', 0)
+                if interval > 0 and (time.time() - last_ts) >= interval:
+                    self.request_pgn(pgn)
+                    time.sleep(0.1)
+            pass
 
-    def pgn2time(self, pgn):
+        logger.info("J1939Listener main loop has exited.")
+    
+    def scan_pgns(self):
+        logger.info("PGN scanning started")
+        for i in range(5):
+            for pgn in self.parser.all_pgns:
+                if pgn not in self.available_pgns:
+                    self.request_pgn(pgn)
+                    time.sleep(0.5)  # brief pause between requests
+
+        logger.info("PGN scan complete")
+
+    def pgn2time_interval(self, pgn):
+        """
+        Map PGN to time interval for periodic requests.
+        """
+
+        no_interval = -1.0  # Indicate no periodic request needed
+
+        fast_interval = 0.2  # 10 seconds for fast updates
+        default_interval = 1.0  # 1 second for default updates
+        slow_interval = 60.0  # 60 seconds for slow updates
+        slower_interval = 300.0  # 5 minutes for very slow updates
+
         pgn2time_d = {
-            65199: 1.00,  # Fuel consumption (gas)
-            65248: 1.00,  # Trip distance
-            65266: 1.00,  # Fuel economic
-            65276: 1.00,  # Dash display: Fuel level...
-            65201: 1.00,  # ECU information
-            65202: 1.00,  # Fuel information
-            65244: 1.00,  # Idle fuel and time
-            65253: 1.00,  # Total engine hours and revolutions
-            65255: 1.00,  # Vehicle hours
-            65257: 1.00,  # Fuel consumption information (Liquid)
-            65263: 1.00,  # Engine Oil level, might not be useful...
-            61444: 1.00,  # ECC1: engine performance
-            # 65262: 1.10,  # Uncomment if needed
-            # 65265: 1.00,  # Uncomment if needed
-            # 65256: 1.20,  # Uncomment if needed
-            # 65266: 1.30,  # Uncomment if needed
+            65265: fast_interval,  # Wheel-Based Vehicle Speed
+            65256: fast_interval,  # Navigation-Based Vehicle Speed, Pitch, Altitude
+            65215: default_interval,  # Front Axle Speed, Relative Speed; Front Axle; Left Wheel, Relative Speed; Front Axle; Right Wheel
+
+
+            65266: default_interval,  # Fuel Rate (Liquid), Instantaneous Fuel Economy, Average Fuel Economy
+            65199: slow_interval,  # Trip Fuel (Gaseous), Total Fuel Used (Gaseous)
+            65257: slow_interval,  # Trip Fuel (Liquid), Total Fuel Used (Liquid)
+
+            61444: slow_interval,  # ECC1: Engine performance
+
+            65276: slow_interval,  # Fuel Level
+            65201: slow_interval,  # Total ECU Distance, Total ECU Run Time
+            65202: slow_interval,  # Total Engine PTO Fuel Used (Gaseous), Trip Average Fuel Rate (Gaseous)
+
+            65253: slower_interval,  # Total Engine Hours, Total Engine Revolutions
+            65255: slower_interval,  # Total Vehicle Hours, Total Power Takeoff Hours
+            65263: slower_interval,  # Engine Oil Level, Engine Oil Pressure
+
+            65244: slower_interval,  # Total Idle Fuel Used, Total Idle Hours
+
+            65217: slower_interval,  # High Resolution Total Vehicle Distance, High Resolution Trip Distance
+            65248: slower_interval,  # Trip Distance, Total Vehicle Distance
+
+            65262: no_interval,  # Fuel Temperature
+
+            65194: no_interval,  # Gaseous Fuel Correction Factor
+            61443: no_interval,  # Accelerator Pedal 1 Low Idle Switch
+            61450: no_interval,  # EGR Mass Flow Rate, Inlet Air Mass Flow Rate
+            65153: no_interval,  # Fuel Flow Rate 1, Fuel Flow Rate 2
+
+            
         }
-        return pgn2time_d.get(pgn, 1.00)  # Default to 1.00 seconds if PGN not found
+        return pgn2time_d.get(pgn, default_interval)  # Default to 1.00 seconds if PGN not found
 
     def ca_receive(self, priority, pgn, source, timestamp, data):
         """Feed incoming message to this CA.
@@ -94,10 +150,14 @@ class J1939Listener:
             Data of the PDU
         """
         # print("ts {} priority {} PGN {} source {} length {} data {}".format(timestamp, priority, pgn, source, len(data), data))
+        if pgn not in self.available_pgns and pgn in self.all_pgns:
+            self.available_pgns.add(pgn)
+            logger.info(f"Discovered new PGN: {pgn}.")
     
         parsed_j1939_data = self.parser.parse_data(pgn, data)
         parsed_j1939_data['timestamp'] = timestamp
         # if parsed_j1939_data['code'] == 0:
+        self.current_data[pgn] = parsed_j1939_data
         logger.debug(f"Parsed J1939 Data: {parsed_j1939_data}")
     
 
@@ -124,32 +184,69 @@ class J1939Listener:
         self.enable = False
         logger.info("J1939Listener stopped.")
 
-def setup_can_interface():
-    """
-    Set up the CAN interface 'can0' with a bitrate of 250000. 
+    def setup_can_interface(self):
+        """
+        Set up the CAN interface 'can0' with a bitrate of 250000. 
     
-    Note that if we want to be compatible with ISO small car OBD-II protocol, we might need to add a function to automatically detect the OBD protocol. But for now, let's focus on heavy vehicles using J1939 over CAN.
-    """
+        Note that if we want to be compatible with ISO small car OBD-II protocol, we might need to add a function to automatically detect the OBD protocol. But for now, let's focus on heavy vehicles using J1939 over CAN.
+        """
 
-    cmd = "sudo ip link set can0 down && sudo ip link set can0 up type can bitrate 250000"
-    try:
-        logger.info("Setting up CAN interface...")
-        result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
-        
-        if result.returncode == 0:
-            logger.info("CAN interface setup successfully.")
-            return True
-        else:
-            error_message = result.stderr.lower()
-            if "does not exist" in error_message:
-                logger.error("Error: CAN interface 'can0' does not exist.")
-            elif "device is down" in error_message:
-                logger.error("Error: CAN interface 'can0' is down.")
-            elif "is up" in error_message:
-                logger.warning("Warning: CAN interface 'can0' is already up.")
+        can_channel = self.can_channel
+        can_rate = 250000
+
+        cmd = f"sudo ip link set {can_channel} down && sudo ip link set {can_channel} up type can bitrate {can_rate}"
+        try:
+            logger.info("Setting up CAN interface...")
+            result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+
+            if result.returncode == 0:
+                logger.info("CAN interface setup successfully.")
+                return True
             else:
-                logger.error(f"Failed to set up CAN interface: {result.stderr}")
+                error_message = result.stderr.lower()
+                if "does not exist" in error_message:
+                    logger.error("Error: CAN interface 'can0' does not exist.")
+                elif "device is down" in error_message:
+                    logger.error("Error: CAN interface 'can0' is down.")
+                elif "is up" in error_message:
+                    logger.warning("Warning: CAN interface 'can0' is already up.")
+                else:
+                    logger.error(f"Failed to set up CAN interface: {result.stderr}")
+                return False
+        except Exception as e:
+            logger.exception(f"An unexpected error occurred while setting up CAN interface: {e}")
             return False
-    except Exception as e:
-        logger.exception(f"An unexpected error occurred while setting up CAN interface: {e}")
-        return False
+
+    def request_pgn(self, pgn):
+        """
+        Given the pgn, generate a function that send the requests of such pgn.
+
+        Used to easily create new callback functions
+        """
+        # wait until we have our device_address
+        if self.ca.state != j1939.ControllerApplication.State.NORMAL:
+            # returning true keeps the timer event active
+            return True
+
+        logger.debug(f"Request can with pgn {pgn}")
+
+        # def send_request(self, data_page, pgn, destination):
+
+        # create data with 8 bytes
+        # data = [j1939.ControllerApplication.FieldValue.NOT_AVAILABLE_8] * 8
+
+        ## Note that in default ca.send_request function, the data length 3 instead of 8. We need to mannually send the raw data
+        ## see also the function defined in controller_application.py:280
+        ## Note 
+        data = [(pgn & 0xFF), ((pgn >> 8) & 0xFF), ((pgn >> 16) & 0xFF), 0x00, 0x00, 0x00, 0x00, 0x00]
+
+        destination = 0x00 # address for engine.
+        data_page = 0
+        priority = 6  # default priority for request PGN
+        self.ca.send_pgn(data_page, 
+                (j1939.ParameterGroupNumber.PGN.REQUEST >> 8) & 0xFF, 
+                destination & 0xFF, 
+                priority, 
+                data)
+        return True
+
