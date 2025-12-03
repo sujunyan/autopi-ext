@@ -27,5 +27,24 @@ PGN,SPN,Name,StartByte,StartBit,BitLength,Resolution,Offset,Unit
 65262,174,FuelTemperature,1,0,8,1,-40,deg
 61450,2659,EGR Mass Flow Rate,0,0,16,0.05,0,kg/h
 61450,132,Inlet Air Mass Flow Rate,2,0,16,0.05,0,kg/h
+65248,244,Trip Distance,0,0,32,0.125,0,km
+65248,245,Total Vehicle Distance,4,0,32,0.125,0,km
+65276,96,Fuel Level,1,0,8,0.4,0,%
+65153,1440,Fuel Flow Rate 1,0,0,16,0.1,0,m^3/h
+65153,1441,Fuel Flow Rate 2,2,0,16,0.1,0,m^3/h
+65201,1032,Total ECU Distance,0,0,32,0.125,0,km
+65201,1033,Total ECU Run Time,4,0,32,0.05,0,hr
+65202,1030,Total Engine PTO Fuel Used (Gaseous),0,0,32,0.5,0,kg
+65202,1031,Trip Average Fuel Rate (Gaseous),4,0,16,0.05,0,kg/h
+65244,236,Total Idle Fuel Used,0,0,32,0.5,0,L
+65244,235,Total Idle Hours,4,0,32,0.05,0,hr
+65253,247,Total Engine Hours,0,0,32,0.05,0,hr
+65253,249,Total Engine Revolutions,4,0,32,1000,0,rev
+65255,246,Total Vehicle Hours,0,0,32,0.05,0,hr
+65255,248,Total Power Takeoff Hours,4,0,32,0.05,0,hr
+65257,182,Trip Fuel (Liquid),0,0,32,0.5,0,L
+65257,250,Total Fuel Used (Liquid),4,0,32,0.5,0,L
+65263,98,Engine Oil Level,2,0,8,0.4,0,%
+65263,100,Engine Oil Pressure,3,0,8,4,0,kPa
 
 

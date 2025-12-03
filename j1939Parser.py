@@ -33,6 +33,10 @@ class J1939Parser:
                     'Unit': row['Unit']
                 }
         return db
+    
+    @property
+    def all_pgns(self):
+        return list(self.parameter_db.keys())
 
     def parse_data(self, pgn, data):
         parsed_values = {'code' : 0, 'pgn': pgn}

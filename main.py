@@ -9,6 +9,7 @@ from logger import config_logger, logger
 # Configure logging for j1939 and can libraries
 logging.getLogger('j1939').setLevel(logging.DEBUG)
 logging.getLogger('can').setLevel(logging.DEBUG)
+parser = J1939Parser()
 
 
 def ca_receive(priority, pgn, source, timestamp, data):
@@ -28,7 +29,6 @@ def ca_receive(priority, pgn, source, timestamp, data):
     # print("ts {} priority {} PGN {} source {} length {} data {}".format(timestamp, priority, pgn, source, len(data), data))
     
     # Instantiate the parser
-    parser = J1939Parser()
     parsed_j1939_data = parser.parse_data(pgn, data)
     parsed_j1939_data['timestamp'] = timestamp
     # if parsed_j1939_data['code'] == 0:
@@ -59,12 +59,11 @@ def request_pgn(cookie, pgn, ca):
 
     destination = 0x00 # address for engine.
     data_page = 0
-    # ca.send_request(data_page, pgn, destination)
-    source_address = ca._device_address
+    priority = 6  # default priority for request PGN
     ca.send_pgn(data_page, 
             (j1939.ParameterGroupNumber.PGN.REQUEST >> 8) & 0xFF, 
             destination & 0xFF, 
-            6, 
+            priority, 
             data)
     return True
 
@@ -142,12 +141,23 @@ def main():
 
             # 
             time_pgn_vec = [
-                (1.00, 61444), 
-                (1.10, 65262),
-                (1.00, 65265),
-                (1.20, 65256),
-                (1.30, 65266),
-                (1.40, 65217)
+                (1.00, 61444), # ECC1: engine performance
+                (1.00, 65199), # Fuel consumption (gas)
+                (1.00, 65248), # Trip distance
+                (1.00, 65266), # Fuel economic
+                (1.00, 65276), # Dash display: Fuel level...
+                (1.00, 65201), # ECU information
+                (1.00, 65202), # Fuel information
+                (1.00, 65244), # Idle fuel and time
+                (1.00, 65253), # Total engine hours and revolutions
+                (1.00, 65255), # Vehicle hours
+                (1.00, 65257), # Fuel consumption information (Liquid)
+                (1.00, 65263), # Engine Oil level, might not be useful...
+                # (1.10, 65262),
+                # (1.00, 65265),
+                # (1.20, 65256),
+                # (1.30, 65266),
+                # (1.40, 65217)
             ]
 
             for time_interval, pgn in time_pgn_vec:
@@ -178,8 +188,6 @@ def main():
             if ecu is not None:
                 ecu.disconnect()
             logger.info("J1939 Controller Application deinitialized.")
-
-
 
 if __name__ == '__main__':
     main()
