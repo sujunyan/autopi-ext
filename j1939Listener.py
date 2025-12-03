@@ -2,7 +2,6 @@ import threading
 import time
 import logging
 import j1939
-from main import setup_can_interface  # Assuming setup_can_interface is in main.py
 import subprocess
 from j1939Parser import J1939Parser
 
@@ -38,7 +37,7 @@ class J1939Listener:
         """
         Set up the CAN interface and initialize the ECU and ControllerApplication.
         """
-        setup_can_interface()  # Set up the CAN interface
+        self.setup_can_interface()  # Set up the CAN interface
         self.ecu = j1939.ElectronicControlUnit()
         self.ca = j1939.ControllerApplication(self.ca_name, self.ca_address)
         self.ecu.connect(bustype=self.bustype, channel=self.can_channel)

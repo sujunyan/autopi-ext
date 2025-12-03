@@ -3,7 +3,7 @@ import time
 import can
 import j1939
 from logger import config_logger, logger
-from j1939Listener import J1939Listener
+from j1939Listener import J1939Listener 
 
 # Configure logging for j1939 and can libraries
 logging.getLogger('j1939').setLevel(logging.DEBUG)

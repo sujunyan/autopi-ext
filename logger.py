@@ -4,13 +4,13 @@ import logging
 import logging.handlers
 import os
 
-logger = logging.getLogger("j1939_parser")
+logger = logging.getLogger("j1939_listener")
 
 
 def config_logger(level=logging.INFO):
-    """Configure the logger for the j1939_parser module."""
+    """Configure the logger for the j1939_listener module."""
     log_directory = "logs"
-    log_filename = "j1939_parser.log"
+    log_filename = "j1939_listener.log"
     log_filepath = os.path.join(log_directory, log_filename)
     os.makedirs(log_directory, exist_ok=True)
 
