@@ -6,7 +6,7 @@ PGN,SPN,Name,StartByte,StartBit,BitLength,Resolution,Offset,Unit
 61444,1483,Source Address of Controlling Device for Engine Control,5,0,8,1,0,-
 61444,1675,Engine Starter Mode,6,0,4,1,0,-
 61444,2432,Engine Demand - Percent Torque,7,0,8,1,-125,%
-65265,84,Wheel-Based Vehicle Speed,0,0,16,0.00390625,0,km/h
+65265,84,Wheel-Based Vehicle Speed,1,0,16,0.00390625,0,km/h
 65266,183,Fuel Rate (Liquid),0,0,16,0.05,0,L/h
 65266,184,Instantaneous Fuel Economy,2,0,16,0.001953125,0,km/kg
 65266,185,Average Fuel Economy,4,0,16,0.001953125,0,km/kg
@@ -46,5 +46,6 @@ PGN,SPN,Name,StartByte,StartBit,BitLength,Resolution,Offset,Unit
 65257,250,Total Fuel Used (Liquid),4,0,32,0.5,0,L
 65263,98,Engine Oil Level,2,0,8,0.4,0,%
 65263,100,Engine Oil Pressure,3,0,8,4,0,kPa
+65132,1624,Tachograph Vehicle Speed,6,0,16,0.00390625,0,km/h
 
 
