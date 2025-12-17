@@ -5,3 +5,4 @@
 logs/
 *.log
 *_old.py
+tmp.py

@@ -168,10 +168,9 @@ class J1939Listener:
             speed = parsed_j1939_data['Wheel-Based Vehicle Speed']['value']
             logger.debug(f"Got speed={speed}")
             # write_speed(self.ser, speed)
-            self.display_manager.write_speed(speed)
+            self.display_manager.set_speed(speed)
             # write_speed(self.ser, speed)
     
-
     def close(self):
         """
         Stop the listener and periodic requests.

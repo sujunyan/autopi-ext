@@ -3,6 +3,7 @@ import serial
 import logging
 import time
 import glob
+import random
 
 logger = logging.getLogger("j1939_listener")
 
@@ -22,6 +23,7 @@ def find_nextion_serial_port(baud_rate=115200, timeout=2):
     # Nextion command and response end bytes
     NEXTION_END_BYTES = b'\xff\xff\xff'
     # Test command: query current display page. 'dp' followed by end bytes.
+    # TEST_COMMAND = b'prints dp,1' + NEXTION_END_BYTES
     TEST_COMMAND = b'sendme' + NEXTION_END_BYTES
     for port in serial_ports:
         print(f"\nAttempting to connect to port: {port}")
@@ -80,6 +82,7 @@ class DisplayManager:
     def setup_serial(self):
         logger.debug("Setup serial port for display manager")
         ser_port = find_nextion_serial_port()
+        self.last_send_suggest_ts = time.time()
         if ser_port is not None:
             self.ser = serial.Serial(port=ser_port, baudrate=115200, timeout=5)
             # self.ser = seri
@@ -87,11 +90,27 @@ class DisplayManager:
             self.ser = None
         # self.ser = serial.Serial(port="/dev/ttyUSB3",baudrate=115200,timeout=5)
 
-    def write_speed(self, speed):
-        ser = self.ser
+    def send_cmd(self, cmd):
+        result = self.ser.write(cmd.encode("utf-8"))
+        self.ser.write(bytes.fromhex('ff ff ff'))
+
+
+    
+    def set_suggest_speed(self, speed):
         speed = int(speed)
-        result=ser.write(f"speed_num.val={speed}".encode("utf-8"))
-        ser.write(bytes.fromhex('ff ff ff'))
+
+        # set the picture number of the display
+        pic_num = speed - 60
+        if pic_num <= 0:
+            pic_num = 1
+
+        logger.debug(f"Set suggest speed {speed}")
+        self.send_cmd(f"speedmeter_bg.pic={pic_num}")
+
+        
+    def set_speed(self, speed):
+        speed = int(speed)
+        self.send_cmd(f"speed_num.val={speed}")
 
         min_angle = -45
         max_angle = 225
@@ -102,8 +121,13 @@ class DisplayManager:
         angle = int(angle)
 
         print(f"writing speed: {speed} angle: {angle}")
-        result=ser.write(f"speedmeter.val={angle}".encode("utf-8"))
-        ser.write(bytes.fromhex('ff ff ff'))
+        self.send_cmd(f"speedmeter.val={angle}")
+        if abs(time.time() - self.last_send_suggest_ts) > 0.1:
+            # delta_v = random.randint(-5, 5)
+            # self.set_suggest_speed(speed + delta_v)
+            self.set_suggest_speed(speed)
+            self.last_send_suggest_ts = time.time()
+
     
     def close():
         if self.ser is not None:
