@@ -4,7 +4,7 @@ import logging
 import j1939
 import subprocess
 from j1939Parser import J1939Parser
-import serial
+from display_manager import DisplayManager
 
 logger = logging.getLogger("j1939_listener")
 
@@ -21,22 +21,6 @@ default_ca_name = j1939.Name(
         identity_number=1234567
         )
 
-def write_speed(ser, speed):
-    speed = int(speed)
-    result=ser.write(f"speed_num.val={speed}".encode("utf-8"))
-    ser.write(bytes.fromhex('ff ff ff'))
-
-    min_angle = -45
-    max_angle = 225
-
-    angle= (speed  / 120) * (max_angle-min_angle) + min_angle
-    if angle < 0:
-        angle += 360
-    angle = int(angle)
-
-    print(f"writing: {speed} {angle}")
-    result=ser.write(f"speedmeter.val={angle}".encode("utf-8"))
-    ser.write(bytes.fromhex('ff ff ff'))
 
 class J1939Listener:
     def __init__(self, ca_name = default_ca_name, ca_address=0xF9, can_channel='can0', bustype='socketcan'):
@@ -50,11 +34,14 @@ class J1939Listener:
         self.ecu = None
         self.ca = None
         self.enable = False
+        self.display_manager = None
 
     def setup(self):
         """
         Set up the CAN interface and initialize the ECU and ControllerApplication.
         """
+
+        self.display_manager = DisplayManager()
         self.setup_can_interface()  # Set up the CAN interface
         self.ecu = j1939.ElectronicControlUnit()
         self.ca = j1939.ControllerApplication(self.ca_name, self.ca_address)
@@ -63,8 +50,6 @@ class J1939Listener:
         self.ca.subscribe(self.ca_receive)
         self.parser = J1939Parser()
 
-        self.ser = serial.Serial(port="/dev/ttyUSB3",baudrate=115200,timeout=5)
-        # print("Serial port details:", ser)
 
         self.ca.start()
         self.enable = True
@@ -182,7 +167,9 @@ class J1939Listener:
             logger.debug(f"Parsed J1939 Data: {parsed_j1939_data}")
             speed = parsed_j1939_data['Wheel-Based Vehicle Speed']['value']
             logger.debug(f"Got speed={speed}")
-            write_speed(self.ser, speed)
+            # write_speed(self.ser, speed)
+            self.display_manager.write_speed(speed)
+            # write_speed(self.ser, speed)
     
 
     def close(self):
@@ -192,7 +179,7 @@ class J1939Listener:
         self.ca.stop()
         self.ecu.disconnect()
         self.enable = False
-        self.ser.close()
+        self.display_manager.close()
         logger.info("J1939Listener stopped.")
 
     def setup_can_interface(self):
