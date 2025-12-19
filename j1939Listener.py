@@ -13,7 +13,7 @@ import os
 logger = logging.getLogger("e2pilot_autopi")
 
 current_dir = Path(__file__).resolve().parent
-data_dir = current_dir.joinpath("../data/j1939")
+data_dir = current_dir.joinpath("data/j1939")
 
 
 default_ca_name = j1939.Name(
@@ -71,6 +71,8 @@ class J1939Listener:
         ts = datetime.now().strftime("%Y%m%d_%H")
         self.raw_can_csv_path = data_dir.joinpath(f"j1939_raw_data_{ts}.csv")
         self.raw_can_csv_path.parent.mkdir(parents=True, exist_ok=True)
+        print(data_dir)
+        print(self.raw_can_csv_path)
 
 
         logger.info("J1939Listener setup complete.")
@@ -188,9 +190,7 @@ class J1939Listener:
         if pgn in [65265]:
             logger.debug(f"Parsed J1939 Data: {parsed_j1939_data}")
             speed = parsed_j1939_data['Wheel-Based Vehicle Speed']['value']
-            logger.debug(f"Got speed={speed}")
-            # write_speed(self.ser, speed)
-            # write_speed(self.ser, speed)
+            # logger.debug(f"Got speed={speed}")
         
     def save_one_frame(self, pgn, timestamp, data):
         # Ensure the CSV file exists and is ready for writing
@@ -205,7 +205,7 @@ class J1939Listener:
                 writer.writerow(["PGN", "Timestamp", "Data"])
             writer.writerow([pgn, timestamp, data.hex()])  # Convert bytearray to hex string for readability
 
-        # logger.debug(f"Saved frame to {csv_file}: PGN={pgn}, Timestamp={timestamp}, Data={data.hex()}")
+        logger.debug(f"Saved frame to {csv_file}: PGN={pgn}, Timestamp={timestamp}, Data={data.hex()}")
 
     
     def close(self):
