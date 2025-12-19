@@ -4,7 +4,6 @@ import logging
 import j1939
 import subprocess
 from j1939Parser import J1939Parser
-from display_manager import DisplayManager
 from pathlib import Path
 from datetime import datetime
 import csv
@@ -42,7 +41,6 @@ class J1939Listener:
         self.ecu = None
         self.ca = None
         self.enable = False
-        self.display_manager = None
 
        
 
@@ -51,7 +49,6 @@ class J1939Listener:
         Set up the CAN interface and initialize the ECU and ControllerApplication.
         """
 
-        self.display_manager = DisplayManager()
         self.setup_can_interface()  # Set up the CAN interface
         self.ecu = j1939.ElectronicControlUnit()
         self.ca = j1939.ControllerApplication(self.ca_name, self.ca_address)
@@ -193,7 +190,6 @@ class J1939Listener:
             speed = parsed_j1939_data['Wheel-Based Vehicle Speed']['value']
             logger.debug(f"Got speed={speed}")
             # write_speed(self.ser, speed)
-            self.display_manager.set_speed(speed)
             # write_speed(self.ser, speed)
         
     def save_one_frame(self, pgn, timestamp, data):
@@ -219,7 +215,6 @@ class J1939Listener:
         self.ca.stop()
         self.ecu.disconnect()
         self.enable = False
-        self.display_manager.close()
         logger.info("J1939Listener stopped.")
 
     def setup_can_interface(self):
