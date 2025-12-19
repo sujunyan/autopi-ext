@@ -73,8 +73,8 @@ class J1939Listener:
         ts = datetime.now().strftime("%Y%m%d_%H")
         self.raw_can_csv_path = data_dir.joinpath(f"j1939_raw_data_{ts}.csv")
         self.raw_can_csv_path.parent.mkdir(parents=True, exist_ok=True)
-        print(data_dir)
-        print(self.raw_can_csv_path)
+        # print(data_dir)
+        # print(self.raw_can_csv_path)
 
         # MQTT settings
         self.mqtt_broker = 'localhost'
@@ -89,14 +89,18 @@ class J1939Listener:
             logger.error(f"Failed to connect to MQTT broker: {e}")
 
 
-        self.scan_pgns()
+        self.is_scanned = False
         logger.info("J1939Listener setup complete.")
 
     def main_loop_once(self):
         """
         Rune the main loop manually once. Can be called periodically from outside.
         """
+        
         if self.enable:
+            if not self.is_scanned:
+                self.scan_pgns()
+
             for pgn in self.available_pgns:
                 interval = self.pgn2time_interval(pgn)
                 last_ts = self.current_data.get(pgn, {}).get('timestamp', 0)
@@ -125,6 +129,7 @@ class J1939Listener:
                 if pgn not in self.available_pgns:
                     self.request_pgn(pgn)
                     time.sleep(0.5)  # brief pause between requests
+        self.is_scanned = True
 
         logger.info("PGN scan complete")
 
@@ -135,7 +140,7 @@ class J1939Listener:
 
         no_interval = -1.0  # Indicate no periodic request needed
 
-        fast_interval = 0.2  # 10 seconds for fast updates
+        fast_interval = 0.2  # 0.2 seconds for fast updates
         default_interval = 1.0  # 1 second for default updates
         slow_interval = 60.0  # 60 seconds for slow updates
         slower_interval = 300.0  # 5 minutes for very slow updates

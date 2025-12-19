@@ -6,6 +6,7 @@ from logger import config_logger, logger
 from j1939Listener import J1939Listener 
 import paho.mqtt.client as mqtt
 from display_manager import DisplayManager
+import json
 
 # Configure logging for j1939 and can libraries
 logging.getLogger('j1939').setLevel(logging.DEBUG)
@@ -27,11 +28,16 @@ class E2PilotAutopi:
         self.display_manager = DisplayManager()
     
     def setup(self):
+        if self.use_1939:
+            self.j1939_listener.setup()
+
         self.display_manager.setup()
         self.setup_mqtt_speed_client()
 
         if self.use_1939:
-            self.j1939_listener.setup()
+            ## Note that CAN interface might need some time to setup...
+            self.j1939_listener.scan_pgns()
+
             
     def main_loop(self):
         while True:
@@ -51,9 +57,12 @@ class E2PilotAutopi:
     def on_speed_message(self, client, userdata, msg):
         if msg.topic == "j1939/Wheel-Based_Vehicle_Speed":
             payload = msg.payload.decode()
-            speed = float(payload['value'])
+            # print(payload)
+            data = json.loads(payload)  # Parse JSON payload
+            speed = data['value']
             self.current_speed = speed
-            logger.debug(f"Received Wheel-Based Vehicle Speed: {speed} km/h")
+            # print(self.current_speed)
+            # logger.debug(f"Received Wheel-Based Vehicle Speed: {speed} km/h")
 
         self.display_manager.set_speed(self.current_speed)
 
