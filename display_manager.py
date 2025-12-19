@@ -19,14 +19,14 @@ def find_nextion_serial_port(baud_rate=115200, timeout=2):
         str: The path to the correct serial port if found, otherwise None.
     """
     serial_ports = glob.glob('/dev/ttyUSB*')
-    print(f"Found potential serial devices: {serial_ports}")
+    logger.debug(f"Found potential serial devices: {serial_ports}")
     # Nextion command and response end bytes
     NEXTION_END_BYTES = b'\xff\xff\xff'
     # Test command: query current display page. 'dp' followed by end bytes.
     # TEST_COMMAND = b'prints dp,1' + NEXTION_END_BYTES
     TEST_COMMAND = b'sendme' + NEXTION_END_BYTES
     for port in serial_ports:
-        print(f"\nAttempting to connect to port: {port}")
+        logger.debug(f"\nAttempting to connect to port: {port}")
         ser = None
         try:
             # Important setup: rtscts=False, dtr=False to avoid interfering with Nextion startup
@@ -35,7 +35,7 @@ def find_nextion_serial_port(baud_rate=115200, timeout=2):
             # Clear input buffer to avoid reading stale data from previous operations
             ser.flushInput()
             ser.write(TEST_COMMAND)
-            print(f"Sent test command: {TEST_COMMAND!r}") # !r for readable byte string representation
+            logger.debug(f"Sent test command: {TEST_COMMAND!r}") # !r for readable byte string representation
             start_time = time.time()
             received_data = b''
             # Wait until end bytes are received or timeout occurs
@@ -44,35 +44,35 @@ def find_nextion_serial_port(baud_rate=115200, timeout=2):
                 if bytes_to_read > 0:
                     received_data += ser.read(bytes_to_read)
                     if NEXTION_END_BYTES in received_data:
-                        print(f"Got received data {received_data} len={len(received_data)}")
+                        logger.debug(f"Got received data {received_data} len={len(received_data)}")
                         if TEST_COMMAND in received_data:
-                            print(f"Got looped data {received_data}")
+                            logger.debug(f"Got looped data {received_data}")
                         elif received_data[0] == 0x66:
-                            print(f"Got seems good data: {received_data}")
+                            logger.debug(f"Got seems good data: {received_data}")
                             return port
                         # Check if the response contains the expected 'dp=' format
                         # if b'dp=' in received_data:
-                        #     print(f">> Received expected response on port {port}: {received_data!r}")
+                        #     logger.debug(f">> Received expected response on port {port}: {received_data!r}")
                         #     return port
                         # else:
                         #     # Received end bytes, but content does not match 'dp='.
                         #     # Could be another device or an error response.
-                        #     print(f"Port {port} received data but not the expected response: {received_data!r}")
+                        #     logger.debug(f"Port {port} received data but not the expected response: {received_data!r}")
                         #     break # Exiting as response doesn't match Nextion 'dp'
                 time.sleep(0.05) # Short delay to avoid busy-waiting
             if received_data:
-                print(f"Port {port} returned data with unexpected response: {received_data!r}")
+                logger.debug(f"Port {port} returned data with unexpected response: {received_data!r}")
             else:
-                print(f"Port {port} did not return any data.")
+                logger.debug(f"Port {port} did not return any data.")
         except serial.SerialException as e:
-            print(f"Failed to open or communicate with port {port}: {e}")
+            logger.debug(f"Failed to open or communicate with port {port}: {e}")
         except Exception as e:
-            print(f"An unknown error occurred on port {port}: {e}")
+            logger.debug(f"An unknown error occurred on port {port}: {e}")
         finally:
             if ser and ser.is_open:
                 ser.close()
-                print(f"Closed port {port}")
-    print("No correct Nextion serial display device found.")
+                logger.debug(f"Closed port {port}")
+    logger.debug("No correct Nextion serial display device found.")
     return None
 
 class DisplayManager:
@@ -90,12 +90,17 @@ class DisplayManager:
             self.ser = None
         # self.ser = serial.Serial(port="/dev/ttyUSB3",baudrate=115200,timeout=5)
 
+    @property
+    def is_able(self):
+        flag = self.ser != None
+
+        return flag
+
     def send_cmd(self, cmd):
-        result = self.ser.write(cmd.encode("utf-8"))
-        self.ser.write(bytes.fromhex('ff ff ff'))
+        if self.enable:
+            result = self.ser.write(cmd.encode("utf-8"))
+            self.ser.write(bytes.fromhex('ff ff ff'))
 
-
-    
     def set_suggest_speed(self, speed):
         speed = int(speed)
 
@@ -120,7 +125,7 @@ class DisplayManager:
             angle += 360
         angle = int(angle)
 
-        print(f"writing speed: {speed} angle: {angle}")
+        logger.debug(f"writing speed: {speed} angle: {angle}")
         self.send_cmd(f"speedmeter.val={angle}")
         if abs(time.time() - self.last_send_suggest_ts) > 0.1:
             # delta_v = random.randint(-5, 5)
@@ -129,6 +134,6 @@ class DisplayManager:
             self.last_send_suggest_ts = time.time()
 
     
-    def close():
+    def close(self):
         if self.ser is not None:
             self.ser.close()
