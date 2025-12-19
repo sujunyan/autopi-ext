@@ -8,6 +8,8 @@ from pathlib import Path
 from datetime import datetime
 import csv
 import os
+import paho.mqtt.client as mqtt
+import json
 
 
 logger = logging.getLogger("e2pilot_autopi")
@@ -71,6 +73,18 @@ class J1939Listener:
         ts = datetime.now().strftime("%Y%m%d_%H")
         self.raw_can_csv_path = data_dir.joinpath(f"j1939_raw_data_{ts}.csv")
         self.raw_can_csv_path.parent.mkdir(parents=True, exist_ok=True)
+
+        # MQTT settings
+        self.mqtt_broker = 'localhost'
+        self.mqtt_port = 1883
+        self.mqtt_client = mqtt.Client()
+        self.mqtt_topic = 'j1939/'
+        # Connect to the MQTT broker
+        try:
+            self.mqtt_client.connect(self.mqtt_broker, self.mqtt_port)
+            logger.info("Connected to MQTT broker.")
+        except Exception as e:
+            logger.error(f"Failed to connect to MQTT broker: {e}")
 
 
         logger.info("J1939Listener setup complete.")
@@ -185,12 +199,44 @@ class J1939Listener:
         parsed_j1939_data['timestamp'] = timestamp
         # if parsed_j1939_data['code'] == 0:
         self.current_data[pgn] = parsed_j1939_data
-        if pgn in [65265]:
-            logger.debug(f"Parsed J1939 Data: {parsed_j1939_data}")
-            speed = parsed_j1939_data['Wheel-Based Vehicle Speed']['value']
-            logger.debug(f"Got speed={speed}")
-            # write_speed(self.ser, speed)
-            # write_speed(self.ser, speed)
+        # if pgn in [65265]:
+        #     logger.debug(f"Parsed J1939 Data: {parsed_j1939_data}")
+        #     speed = parsed_j1939_data['Wheel-Based Vehicle Speed']['value']
+        #     logger.debug(f"Got speed={speed}")
+    
+    def mqtt_topic_filter(self, topic):
+        """
+        Filtering function for MQTT topics.
+        """
+
+        topic_subtrings = [
+                        "Vehicle_Speed", 
+                        "Fuel_Level",  
+                        "Fuel_Rate",
+                        "Fuel_Used",
+                        "Vehicle_Distance", 
+                        "Pitch"
+                    ]
+        for substr in topic_subtrings:
+            if substr in topic:
+                return True
+        return False
+
+    def publish_one_mqtt_message(self, parsed_j1939_data):
+        mqtt_topic = self.mqtt_topic
+         # Publish the frame to an MQTT topic
+        # mqtt_payload = parsed_j1939_data
+        for (key, value) in parsed_j1939_data.items():
+            sub_topic = key.replace(" ", "_")
+            if not self.mqtt_topic_filter(sub_topic):
+                continue
+            topic = mqtt_topic + sub_topic
+            payload = value
+            try:
+                self.mqtt_client.publish(topic, json.dumps(payload))
+                logger.debug(f"Published frame to MQTT topic '{topic}': {payload}")
+            except Exception as e:
+                logger.error(f"Failed to publish to MQTT: {e}")
         
     def save_one_frame(self, pgn, timestamp, data):
         # Ensure the CSV file exists and is ready for writing

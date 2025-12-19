@@ -24,7 +24,7 @@ PGN,SPN,Name,StartByte,StartBit,BitLength,Resolution,Offset,Unit
 65215,906,Relative Speed; Front Axle; Right Wheel,3,0,8,0.0625,-7.8125,km/h
 65194,1116,Gaseous Fuel Correction Factor,0,0,8,1,0,%
 61443,558,Accelerator Pedal 1 Low Idle Switch,0,0,2,1,0,-
-65262,174,FuelTemperature,1,0,8,1,-40,deg
+65262,174,Fuel Temperature,1,0,8,1,-40,deg
 61450,2659,EGR Mass Flow Rate,0,0,16,0.05,0,kg/h
 61450,132,Inlet Air Mass Flow Rate,2,0,16,0.05,0,kg/h
 65248,244,Trip Distance,0,0,32,0.125,0,km
