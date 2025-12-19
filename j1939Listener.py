@@ -194,7 +194,7 @@ class J1939Listener:
         
     def save_one_frame(self, pgn, timestamp, data):
         # Ensure the CSV file exists and is ready for writing
-        csv_file = self.raw_csv_path
+        csv_file = self.raw_can_csv_path
         file_exists = os.path.isfile(csv_file)
 
         # Write the frame to the CSV file
