@@ -5,8 +5,16 @@ import j1939
 import subprocess
 from j1939Parser import J1939Parser
 from display_manager import DisplayManager
+from pathlib import Path
+from datetime import datetime
+import csv
+import os
+
 
 logger = logging.getLogger("e2pilot_autopi")
+
+current_dir = Path(__file__).resolve().parent
+data_dir = current_dir.joinpath("../data/j1939")
 
 
 default_ca_name = j1939.Name(
@@ -36,6 +44,8 @@ class J1939Listener:
         self.enable = False
         self.display_manager = None
 
+       
+
     def setup(self):
         """
         Set up the CAN interface and initialize the ECU and ControllerApplication.
@@ -60,8 +70,25 @@ class J1939Listener:
         ## store the current data with the format pgn: data
         self.current_data = {}
 
+        ## the path to store the raw can data
+        ts = datetime.now().strftime("%Y%m%d_%H")
+        self.raw_can_csv_path = data_dir.joinpath(f"j1939_raw_data_{ts}.csv")
+        self.raw_can_csv_path.parent.mkdir(parents=True, exist_ok=True)
+
 
         logger.info("J1939Listener setup complete.")
+
+    def main_loop_once(self):
+        """
+        Rune the main loop manually once. Can be called periodically from outside.
+        """
+        if self.enable:
+            for pgn in self.available_pgns:
+                interval = self.pgn2time_interval(pgn)
+                last_ts = self.current_data.get(pgn, {}).get('timestamp', 0)
+                if interval > 0 and (time.time() - last_ts) >= interval:
+                    self.request_pgn(pgn)
+            # logger.debug(f"Current data {self.current_data}")
 
     def main_loop(self):
         """
@@ -72,12 +99,8 @@ class J1939Listener:
         
         self.scan_pgns()
         while self.enable:
-            for pgn in self.available_pgns:
-                interval = self.pgn2time_interval(pgn)
-                last_ts = self.current_data.get(pgn, {}).get('timestamp', 0)
-                if interval > 0 and (time.time() - last_ts) >= interval:
-                    self.request_pgn(pgn)
-                    time.sleep(0.1)
+            self.main_loop_once()
+            time.sleep(0.1)
             # logger.debug(f"Current data {self.current_data}")
 
         logger.info("J1939Listener main loop has exited.")
@@ -158,6 +181,8 @@ class J1939Listener:
         if pgn not in self.available_pgns and pgn in self.all_pgns:
             self.available_pgns.add(pgn)
             logger.info(f"Discovered new PGN: {pgn}.")
+        
+        self.save_one_frame(pgn, timestamp, data)
     
         parsed_j1939_data = self.parser.parse_data(pgn, data)
         parsed_j1939_data['timestamp'] = timestamp
@@ -170,6 +195,22 @@ class J1939Listener:
             # write_speed(self.ser, speed)
             self.display_manager.set_speed(speed)
             # write_speed(self.ser, speed)
+        
+    def save_one_frame(self, pgn, timestamp, data):
+        # Ensure the CSV file exists and is ready for writing
+        csv_file = self.raw_csv_path
+        file_exists = os.path.isfile(csv_file)
+
+        # Write the frame to the CSV file
+        with open(csv_file, mode='a', newline='') as fd:
+            writer = csv.writer(fd)
+            if not file_exists:
+                # Write the header only if the file is being created
+                writer.writerow(["PGN", "Timestamp", "Data"])
+            writer.writerow([pgn, timestamp, data.hex()])  # Convert bytearray to hex string for readability
+
+        # logger.debug(f"Saved frame to {csv_file}: PGN={pgn}, Timestamp={timestamp}, Data={data.hex()}")
+
     
     def close(self):
         """
