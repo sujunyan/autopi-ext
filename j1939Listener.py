@@ -199,6 +199,7 @@ class J1939Listener:
     
         parsed_j1939_data = self.parser.parse_data(pgn, data)
         parsed_j1939_data['timestamp'] = timestamp
+        self.publish_one_mqtt_message(parsed_j1939_data)
         # if parsed_j1939_data['code'] == 0:
         self.current_data[pgn] = parsed_j1939_data
         # if pgn in [65265]:
@@ -228,15 +229,18 @@ class J1939Listener:
         mqtt_topic = self.mqtt_topic
          # Publish the frame to an MQTT topic
         # mqtt_payload = parsed_j1939_data
+        ts = parsed_j1939_data['timestamp']
         for (key, value) in parsed_j1939_data.items():
             sub_topic = key.replace(" ", "_")
             if not self.mqtt_topic_filter(sub_topic):
                 continue
             topic = mqtt_topic + sub_topic
             payload = value
+            payload['topic'] = sub_topic
+            payload['timestamp'] = ts
             try:
                 self.mqtt_client.publish(topic, json.dumps(payload))
-                logger.debug(f"Published frame to MQTT topic '{topic}': {payload}")
+                # logger.debug(f"Published frame to MQTT topic '{topic}': {payload}")
             except Exception as e:
                 logger.error(f"Failed to publish to MQTT: {e}")
         
@@ -253,7 +257,7 @@ class J1939Listener:
                 writer.writerow(["Timestamp", "PGN", "Data"])
             writer.writerow([timestamp, pgn, data.hex()])  # Convert bytearray to hex string for readability
 
-        logger.debug(f"Saved frame to {csv_file}: PGN={pgn}, Timestamp={timestamp}, Data={data.hex()}")
+        # logger.debug(f"Saved frame to {csv_file}: PGN={pgn}, Timestamp={timestamp}, Data={data.hex()}")
 
     
     def close(self):
