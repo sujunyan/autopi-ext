@@ -15,7 +15,7 @@ import json
 logger = logging.getLogger("e2pilot_autopi")
 
 current_dir = Path(__file__).resolve().parent
-data_dir = current_dir.joinpath("../data/j1939")
+data_dir = current_dir.joinpath("data/j1939")
 
 
 default_ca_name = j1939.Name(
@@ -73,6 +73,8 @@ class J1939Listener:
         ts = datetime.now().strftime("%Y%m%d_%H")
         self.raw_can_csv_path = data_dir.joinpath(f"j1939_raw_data_{ts}.csv")
         self.raw_can_csv_path.parent.mkdir(parents=True, exist_ok=True)
+        print(data_dir)
+        print(self.raw_can_csv_path)
 
         # MQTT settings
         self.mqtt_broker = 'localhost'
@@ -251,7 +253,7 @@ class J1939Listener:
                 writer.writerow(["Timestamp", "PGN", "Data"])
             writer.writerow([timestamp, pgn, data.hex()])  # Convert bytearray to hex string for readability
 
-        # logger.debug(f"Saved frame to {csv_file}: PGN={pgn}, Timestamp={timestamp}, Data={data.hex()}")
+        logger.debug(f"Saved frame to {csv_file}: PGN={pgn}, Timestamp={timestamp}, Data={data.hex()}")
 
     
     def close(self):
