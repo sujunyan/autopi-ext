@@ -6,7 +6,7 @@ import subprocess
 from j1939Parser import J1939Parser
 from display_manager import DisplayManager
 
-logger = logging.getLogger("j1939_listener")
+logger = logging.getLogger("e2pilot_autopi")
 
 
 default_ca_name = j1939.Name(

@@ -3,7 +3,7 @@ import csv
 import os
 import logging
 
-logger = logging.getLogger("j1939_listener")
+logger = logging.getLogger("e2pilot_autopi")
 
 
 class J1939Parser:

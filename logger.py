@@ -4,7 +4,7 @@ import logging
 import logging.handlers
 import os
 
-logger = logging.getLogger("j1939_listener")
+logger = logging.getLogger("e2pilot_autopi")
 
 
 def config_logger(level=logging.INFO):

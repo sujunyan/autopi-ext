@@ -5,7 +5,7 @@ import time
 import glob
 import random
 
-logger = logging.getLogger("j1939_listener")
+logger = logging.getLogger("e2pilot_autopi")
 
 def find_nextion_serial_port(baud_rate=115200, timeout=2):
     """
