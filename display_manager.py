@@ -77,6 +77,9 @@ def find_nextion_serial_port(baud_rate=115200, timeout=2):
 
 class DisplayManager:
     def __init__(self):
+        pass
+
+    def setup(self):
         self.setup_serial()
 
     def setup_serial(self):
@@ -91,8 +94,8 @@ class DisplayManager:
         # self.ser = serial.Serial(port="/dev/ttyUSB3",baudrate=115200,timeout=5)
 
     @property
-    def is_able(self):
-        flag = self.ser != None
+    def enable(self):
+        flag = (self.ser != None)
 
         return flag
 

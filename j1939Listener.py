@@ -89,6 +89,7 @@ class J1939Listener:
             logger.error(f"Failed to connect to MQTT broker: {e}")
 
 
+        self.scan_pgns()
         logger.info("J1939Listener setup complete.")
 
     def main_loop_once(self):
@@ -110,7 +111,6 @@ class J1939Listener:
         if not self.enable:
             logger.error("J1939Listener is not enabled. Please run setup() first.")
         
-        self.scan_pgns()
         while self.enable:
             self.main_loop_once()
             time.sleep(0.1)
