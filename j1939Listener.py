@@ -202,8 +202,8 @@ class J1939Listener:
             writer = csv.writer(fd)
             if not file_exists:
                 # Write the header only if the file is being created
-                writer.writerow(["PGN", "Timestamp", "Data"])
-            writer.writerow([pgn, timestamp, data.hex()])  # Convert bytearray to hex string for readability
+                writer.writerow(["Timestamp", "PGN", "Data"])
+            writer.writerow([timestamp, pgn, data.hex()])  # Convert bytearray to hex string for readability
 
         # logger.debug(f"Saved frame to {csv_file}: PGN={pgn}, Timestamp={timestamp}, Data={data.hex()}")
 
