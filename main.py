@@ -8,12 +8,13 @@ import paho.mqtt.client as mqtt
 from display_manager import DisplayManager
 from h11_listener import H11Listener
 import json
+import threading
 
 # Configure logging for j1939 and can libraries
 logging.getLogger('j1939').setLevel(logging.DEBUG)
 logging.getLogger('can').setLevel(logging.DEBUG)
 
-USE_1939 = True
+USE_1939 = False
 
 class E2PilotAutopi:
     def __init__(self):
@@ -37,18 +38,22 @@ class E2PilotAutopi:
 
         self.h11_listener.setup()
 
+        self.last_obd_speed_time = time.time()
+
         if self.use_1939:
             ## Note that CAN interface might need some time to setup...
             self.j1939_listener.scan_pgns()
 
-    def start_loop(self):
+        self.current_speed = -1
+
+    def loop_start(self):
         if self.use_1939:
-            self.j1939_listener.start_loop()
-        self.h11_listener.start_loop()
+            self.j1939_listener.loop_start()
+        self.h11_listener.loop_start()
         
             
     def main_loop(self):
-        self.start_loop()
+        self.loop_start()
         while True:
             time.sleep(0.1)
 
@@ -61,6 +66,12 @@ class E2PilotAutopi:
         if self.h11_listener:
             self.h11_listener.close()
         
+
+    def is_obd_alive(self):
+        update_time_threshold = 2.0
+        flag = (time.time() - self.last_obd_speed_time) < update_time_threshold
+        
+
         
     def on_speed_message(self, client, userdata, msg):
 
@@ -70,14 +81,17 @@ class E2PilotAutopi:
         if msg.topic == "j1939/Wheel-Based_Vehicle_Speed":
             speed = data['value']
             self.current_speed = speed
+            self.last_obd_speed_time = time.time()
         elif msg.topic == "obd/SPEED":
-            pass
-        elif msg.topic == "h11gps/speed_kmh":
+            self.last_obd_speed_time = time.time()
+        elif msg.topic == "h11gps/speed":
             speed = data['speed_kmh']
+            if not self.is_obd_alive():
+                self.current_speed = speed
             
             # self.current_speed = speed
             # print(self.current_speed)
-            logger.debug(f"Received h11gps speed: {speed} km/h")
+            # logger.debug(f"Received h11gps speed: {speed} km/h")
 
         self.display_manager.set_speed(self.current_speed)
 
@@ -88,7 +102,7 @@ class E2PilotAutopi:
         self.mqtt_speed_client.subscribe([
             ("j1939/Wheel-Based_Vehicle_Speed", 0),
             ("obd/SPEED", 0),
-            ("h11gps/speed_kmh", 0)
+            ("h11gps/speed", 0)
         ])
         # Start the MQTT client loop in the background
         self.mqtt_speed_client.loop_start()

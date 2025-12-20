@@ -7,6 +7,7 @@ import os
 import logging
 from pathlib import Path
 from datetime import datetime
+import threading
 
 from logger import config_logger 
 
@@ -101,7 +102,7 @@ class H11Listener:
 
         logger.info("Starting GPS Data Stream...")
         try:
-            while self.enable:
+            while self.enable and self.ser.is_open:
                 if self.ser.in_waiting > 0:
                     line = self.ser.readline().decode('ascii', errors='replace').strip()
                     if line:
@@ -116,9 +117,9 @@ class H11Listener:
 
     def close(self):
         self.enable = False
-        if hasattr(self, 'thread') and self.thread.is_alive():
-            self.thread.join()
-        if self.ser:
+        # if hasattr(self, 'thread') and self.thread.is_alive():
+            # self.thread.join()
+        if self.ser and self.ser.is_open:
             self.ser.close()
         self.client.loop_stop()
         self.client.disconnect()

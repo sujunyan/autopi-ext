@@ -112,7 +112,7 @@ class DisplayManager:
         if pic_num <= 0:
             pic_num = 1
 
-        logger.debug(f"Set suggest speed {speed}")
+        # logger.debug(f"Set suggest speed {speed}")
         self.send_cmd(f"speedmeter_bg.pic={pic_num}")
 
         
@@ -128,7 +128,7 @@ class DisplayManager:
             angle += 360
         angle = int(angle)
 
-        logger.debug(f"writing speed: {speed} angle: {angle}")
+        # logger.debug(f"writing speed: {speed} angle: {angle}")
         self.send_cmd(f"speedmeter.val={angle}")
         if abs(time.time() - self.last_send_suggest_ts) > 0.1:
             # delta_v = random.randint(-5, 5)
