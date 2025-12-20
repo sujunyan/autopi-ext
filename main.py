@@ -6,6 +6,7 @@ from logger import config_logger, logger
 from j1939Listener import J1939Listener 
 import paho.mqtt.client as mqtt
 from display_manager import DisplayManager
+from h11_listener import H11Listener
 import json
 
 # Configure logging for j1939 and can libraries
@@ -19,13 +20,13 @@ class E2PilotAutopi:
         self.use_1939 = USE_1939
         if self.use_1939:
             self.j1939_listener = J1939Listener()
-            self.j1939_listener.setup()
 
         
         self.mqtt_broker = "localhost"
         self.mqtt_port = 1883
 
         self.display_manager = DisplayManager()
+        self.h11_listener = H11Listener(mqtt_broker=self.mqtt_broker)
     
     def setup(self):
         if self.use_1939:
@@ -34,17 +35,22 @@ class E2PilotAutopi:
         self.display_manager.setup()
         self.setup_mqtt_speed_client()
 
+        self.h11_listener.setup()
+
         if self.use_1939:
             ## Note that CAN interface might need some time to setup...
             self.j1939_listener.scan_pgns()
 
+    def start_loop(self):
+        if self.use_1939:
+            self.j1939_listener.start_loop()
+        self.h11_listener.start_loop()
+        
             
     def main_loop(self):
+        self.start_loop()
         while True:
-            if self.use_1939:
-                self.j1939_listener.main_loop_once()
             time.sleep(0.1)
-            # self.mqtt_speed_client.loop(timeout=1.0)
 
     def close(self):
         if self.use_1939:
@@ -52,17 +58,26 @@ class E2PilotAutopi:
         if self.mqtt_speed_client:
             self.mqtt_speed_client.loop_stop()
             self.mqtt_speed_client.disconnect()
+        if self.h11_listener:
+            self.h11_listener.close()
         
         
     def on_speed_message(self, client, userdata, msg):
+
+        payload = msg.payload.decode()
+        data = json.loads(payload)  # Parse JSON payload
+
         if msg.topic == "j1939/Wheel-Based_Vehicle_Speed":
-            payload = msg.payload.decode()
-            # print(payload)
-            data = json.loads(payload)  # Parse JSON payload
             speed = data['value']
             self.current_speed = speed
+        elif msg.topic == "obd/SPEED":
+            pass
+        elif msg.topic == "h11gps/speed_kmh":
+            speed = data['speed_kmh']
+            
+            # self.current_speed = speed
             # print(self.current_speed)
-            # logger.debug(f"Received Wheel-Based Vehicle Speed: {speed} km/h")
+            logger.debug(f"Received h11gps speed: {speed} km/h")
 
         self.display_manager.set_speed(self.current_speed)
 
@@ -73,12 +88,10 @@ class E2PilotAutopi:
         self.mqtt_speed_client.subscribe([
             ("j1939/Wheel-Based_Vehicle_Speed", 0),
             ("obd/SPEED", 0),
+            ("h11gps/speed_kmh", 0)
         ])
         # Start the MQTT client loop in the background
         self.mqtt_speed_client.loop_start()
-
-    
-
 
 def main():
     config_logger(logging.DEBUG)

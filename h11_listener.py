@@ -90,6 +90,10 @@ class H11Listener:
         except Exception as e:
             logger.error(f"Parsing error: {e}")
 
+    def loop_start(self):
+        self.thread = threading.Thread(target=self.main_loop, daemon=True)
+        self.thread.start()
+
     def main_loop(self):
         if not self.ser and not self.enable:
             logger.warn("h11 listener is not set up properly.")
@@ -103,6 +107,8 @@ class H11Listener:
                     if line:
                         self.save_raw_data(line)
                         self.parse_and_publish(line)
+                else:
+                    time.sleep(0.1)
         except KeyboardInterrupt:
             logger.info("\nStopping h11_listener...")
         finally:
@@ -110,6 +116,8 @@ class H11Listener:
 
     def close(self):
         self.enable = False
+        if hasattr(self, 'thread') and self.thread.is_alive():
+            self.thread.join()
         if self.ser:
             self.ser.close()
         self.client.loop_stop()

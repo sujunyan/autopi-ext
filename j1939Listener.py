@@ -44,8 +44,6 @@ class J1939Listener:
         self.ca = None
         self.enable = False
 
-       
-
     def setup(self):
         """
         Set up the CAN interface and initialize the ECU and ControllerApplication.
@@ -107,6 +105,10 @@ class J1939Listener:
                 if interval > 0 and (time.time() - last_ts) >= interval:
                     self.request_pgn(pgn)
             # logger.debug(f"Current data {self.current_data}")
+
+    def loop_start(self):
+        self.thread = threading.Thread(target=self.main_loop, daemon=True)
+        self.thread.start()
 
     def main_loop(self):
         """
@@ -269,9 +271,9 @@ class J1939Listener:
         """
         Stop the listener and periodic requests.
         """
+        self.enable = False
         self.ca.stop()
         self.ecu.disconnect()
-        self.enable = False
         logger.info("J1939Listener stopped.")
 
     def setup_can_interface(self):
