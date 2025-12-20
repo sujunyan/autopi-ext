@@ -4,6 +4,11 @@ import paho.mqtt.client as mqtt
 import json
 import time
 import os
+import logging
+from pathlib import Path
+from datetime import datetime
+
+from logger import config_logger 
 
 logger = logging.getLogger("e2pilot_autopi")
 
@@ -32,11 +37,11 @@ class H11Listener:
             # 连接 MQTT
             self.client.connect(self.mqtt_broker, self.mqtt_port, 60)
             self.client.loop_start()
-            logger.debug(f"Connected to MQTT Broker: {self.mqtt_broker}")
+            # logger.debug(f"Connected to MQTT Broker: {self.mqtt_broker}")
             
             # 连接串口
             self.ser = serial.Serial(self.port, self.baud, timeout=1)
-            logger.debug(f"Connected to GPS on {self.port}")
+            # logger.debug(f"Connected to GPS on {self.port}")
             self.enable = True
         except Exception as e:
             logger.error(f"Connection error: {e}")
@@ -71,14 +76,15 @@ class H11Listener:
                 data_payload.update({
                     "track_true": msg.true_track,
                     "track_magnetic": msg.mag_track,
-                    "speed_knots": msg.spd_over_grnd_kts,
+                    # "speed_knots": msg.spd_over_grnd_kts,
                     "speed_kmh": msg.spd_over_grnd_kmph
                 })
                 topic = f"{self.mqtt_topic_prefix}/speed"
+                # print(data_payload)
             else:
                 return
             self.client.publish(topic, json.dumps(data_payload))
-            logger.debug(f"Published to {topic}: Lat {data_payload.get('lat')}, Lon {data_payload.get('lon')}")
+            # logger.debug(f"Published to {topic}: Lat {data_payload.get('lat')}, Lon {data_payload.get('lon')}")
         except pynmea2.ParseError:
             pass
         except Exception as e:
@@ -89,7 +95,7 @@ class H11Listener:
             logger.warn("h11 listener is not set up properly.")
             return
 
-        logger.debug("Starting GPS Data Stream...")
+        logger.info("Starting GPS Data Stream...")
         try:
             while self.enable:
                 if self.ser.in_waiting > 0:
@@ -98,7 +104,7 @@ class H11Listener:
                         self.save_raw_data(line)
                         self.parse_and_publish(line)
         except KeyboardInterrupt:
-            logger.debug("\nStopping h11_listener...")
+            logger.info("\nStopping h11_listener...")
         finally:
             self.close()
 
@@ -110,6 +116,7 @@ class H11Listener:
         self.client.disconnect()
 
 if __name__ == "__main__":
+    config_logger(logging.DEBUG)
     h11_listener = H11Listener(port='/dev/rfcomm0')
     h11_listener.setup()
     h11_listener.main_loop()
