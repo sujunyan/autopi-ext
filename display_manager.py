@@ -104,16 +104,35 @@ class DisplayManager:
             result = self.ser.write(cmd.encode("utf-8"))
             self.ser.write(bytes.fromhex('ff ff ff'))
 
+    def set_grade(self, grade):
+        grade = int(grade)
+        self.send_cmd(f"grade.val={grade}")
+
+    def set_distance(self, distance):
+        distance = int(distance)
+        self.send_cmd(f"distance.val={distance}")
+
+    def set_follow_rate(self, rate):
+        rate = int(rate)
+        self.send_cmd(f"follow_rate.val={rate}")
+
+    def set_follow_range(self, distance):
+        distance = int(distance)
+        self.send_cmd(f"follow_range.val={distance}")
+
     def set_suggest_speed(self, speed):
         speed = int(speed)
 
         # set the picture number of the display
-        pic_num = speed - 60
-        if pic_num <= 0:
-            pic_num = 1
+        pic_num = speed - 4
+        sug_speed = speed
+        if pic_num <= 0 or (pic_num > 111):
+            pic_num = 0
+            sug_speed = 0
 
         # logger.debug(f"Set suggest speed {speed}")
         self.send_cmd(f"speedmeter_bg.pic={pic_num}")
+        self.send_cmd(f"suggest_speed.val={sug_speed}")
 
         
     def set_speed(self, speed):

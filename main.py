@@ -7,6 +7,7 @@ from j1939Listener import J1939Listener
 import paho.mqtt.client as mqtt
 from display_manager import DisplayManager
 from h11_listener import H11Listener
+from route_matcher import RouteMatcher
 import json
 import threading
 
@@ -28,6 +29,7 @@ class E2PilotAutopi:
 
         self.display_manager = DisplayManager()
         self.h11_listener = H11Listener(mqtt_broker=self.mqtt_broker)
+        self.route_matcher = RouteMatcher()
     
     def setup(self):
         if self.use_1939:
@@ -45,6 +47,7 @@ class E2PilotAutopi:
             self.j1939_listener.scan_pgns()
 
         self.current_speed = -1
+        self.route_matcher.load_route_from_json("test.2025-07-04.opt.JuMP.route.json")
 
     def loop_start(self):
         if self.use_1939:

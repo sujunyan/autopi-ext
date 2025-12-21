@@ -7,11 +7,11 @@ from pathlib import Path
 logger = logging.getLogger("e2pilot_autopi")
 
 current_dir = Path(__file__).resolve().parent
-data_dir = current_dir.joinpath("data/opt_route")
+g_data_dir = current_dir.joinpath("data/opt_route")
 
 class RouteMatcher:
-    def __init__(self, data_dir):
-        self.data_dir = Path(data_dir)
+    def __init__(self, data_dir = ""):
+        self.data_dir = g_data_dir.joinpath(data_dir)
         self.route_data = None
 
     def load_route_from_json(self, filename):
@@ -91,5 +91,11 @@ def _test_route_matcher():
 
 
 if __name__ == "__main__":
-    _test_route_matcher()
+    # _test_route_matcher()
+    matcher = RouteMatcher()
+    matcher.load_route_from_json("test.2025-07-04.opt.JuMP.route.json")
+    lat = 22.596501083333333
+    lon = 113.89512528333333
+    closest = matcher.find_closest_speedplan_point(lat, lon)
+    print(f"Closest point to ({lat}, {lon}): {closest}")
     
