@@ -13,12 +13,22 @@ class RouteMatcher:
     def __init__(self, data_dir = ""):
         self.data_dir = g_data_dir.joinpath(data_dir)
         self.route_data = None
+        self.pt = None
 
     def load_route_from_json(self, filename):
         filepath = self.data_dir.joinpath(filename)
         with open(filepath, 'r') as f:
             self.route_data = json.load(f)
-
+    
+    def update_pt(self, lat, lon):
+        """
+        Update the current closest point based on the given latitude and longitude.
+        """
+        pt = self.find_closest_speedplan_point(lat, lon)
+        if pt:
+            self.pt = pt
+        return self.pt
+    
     def find_closest_speedplan_point(self, lat, lon):
         if not self.route_data:
             return None

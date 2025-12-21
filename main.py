@@ -37,10 +37,15 @@ class E2PilotAutopi:
 
         self.display_manager.setup()
         self.setup_mqtt_speed_client()
+        self.setup_mqtt_location_client()
 
         self.h11_listener.setup()
 
+
+        # heartbeat related threshold
+        update_time_threshold = 3.0
         self.last_obd_speed_time = time.time()
+        self.last_h11_location_time = time.time()
 
         if self.use_1939:
             ## Note that CAN interface might need some time to setup...
@@ -53,7 +58,6 @@ class E2PilotAutopi:
         if self.use_1939:
             self.j1939_listener.loop_start()
         self.h11_listener.loop_start()
-        
             
     def main_loop(self):
         self.loop_start()
@@ -69,15 +73,19 @@ class E2PilotAutopi:
         if self.h11_listener:
             self.h11_listener.close()
         
+    def is_h11_alive(self):
+        if self.h11_listener.enable == False:
+            return False
+
+        flag = (time.time() - self.last_h11_location_time) < self.update_time_threshold
+        return flag
+
 
     def is_obd_alive(self):
-        update_time_threshold = 2.0
-        flag = (time.time() - self.last_obd_speed_time) < update_time_threshold
-        
-
+        flag = (time.time() - self.last_obd_speed_time) < self.update_time_threshold
+        return flag
         
     def on_speed_message(self, client, userdata, msg):
-
         payload = msg.payload.decode()
         data = json.loads(payload)  # Parse JSON payload
 
@@ -92,7 +100,6 @@ class E2PilotAutopi:
             if not self.is_obd_alive():
                 self.current_speed = speed
             
-            # self.current_speed = speed
             # print(self.current_speed)
             # logger.debug(f"Received h11gps speed: {speed} km/h")
 
@@ -109,6 +116,36 @@ class E2PilotAutopi:
         ])
         # Start the MQTT client loop in the background
         self.mqtt_speed_client.loop_start()
+
+    def on_location_message(self, client, userdata, msg):
+        payload = msg.payload.decode()
+        data = json.loads(payload)
+        if msg.topic == "h11gps/position":
+            self.last_h11_location_time = time.time()
+            self.lat = data['lat']
+            self.lon = data['lon']
+            self.alt = data['alt']
+        elif msg.topic == "track/pos":
+            if not self.is_h11_alive():
+                pos_data = data['loc']
+                self.lat = pos_data['lat']
+                self.lon = pos_data['lon']
+                self.alt = data['alt']
+
+        pt = self.route_matcher.update_pt(self.lat, self.lon)
+        sug_spd = pt.get('veh_state', {}).get('speed', -1)
+        self.display_manager.set_suggest_speed(sug_spd)
+
+    def setup_mqtt_location_client(self):
+        self.mqtt_location_client = mqtt.Client()
+        self.mqtt_location_client.on_message = self.on_location_message
+        self.mqtt_location_client.connect(self.mqtt_broker, self.mqtt_port)
+        self.mqtt_location_client.subscribe([
+                ("h11gps/position", 0), # provided by h11_listener
+                ("track/pos", 0), # provided by track_manager inside autopi
+        ])
+        self.mqtt_location_client.loop_start()
+
 
 def main():
     config_logger(logging.DEBUG)
