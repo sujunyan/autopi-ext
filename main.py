@@ -75,6 +75,9 @@ class E2PilotAutopi:
         if self.mqtt_speed_client:
             self.mqtt_speed_client.loop_stop()
             self.mqtt_speed_client.disconnect()
+        if self.mqtt_location_client:
+            self.mqtt_location_client.loop_stop()
+            self.mqtt_location_client.disconnect()
         if self.h11_listener:
             self.h11_listener.close()
         
@@ -155,31 +158,23 @@ class E2PilotAutopi:
 def main():
     config_logger(logging.DEBUG)
 
-    logger.info("Initializing J1939 Controller Application")
-
-    # compose the name descriptor for the new ca
+    logger.info("Initializing E2Pilot Application")
     
     try:
         app = E2PilotAutopi()
         app.setup()
         app.main_loop()
-        # j1939_listener = J1939Listener()    
-        # j1939_listener.setup()
-        # j1939_listener.main_loop()
     except can.exceptions.CanError as e:
         logger.error(f"CAN bus error: {e}", exc_info=True)
-        # logger.info("Retrying connection in 5 seconds...")
-        # time.sleep(5)
     except KeyboardInterrupt:
-        logger.info("J1939 Controller Application stopped by user.")
+        logger.info("E2Pilot Application stopped by user.")
     except Exception as e:
         logger.error(f"An unexpected error occurred: {e}", exc_info=True)
-        # logger.info("Restarting J1939 Controller Application in 5 seconds...")
         time.sleep(5)
     finally:
         if 'app' in locals():
             app.close()
-        logger.info("J1939 Controller Application deinitialized.")
+        logger.info("Application exit successfully.")
 
 if __name__ == '__main__':
     main()
