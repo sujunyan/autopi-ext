@@ -1,5 +1,4 @@
 
-import paho.mqtt.client as mqtt
 import json, time, threading, os, logging, csv
 from datetime import datetime
 from pathlib import Path
@@ -11,5 +10,86 @@ current_dir = Path(__file__).resolve().parent
 data_dir = current_dir.joinpath("data/opt_route")
 
 class RouteMatcher:
-    def __init__(self):
-        pass
+    def __init__(self, data_dir):
+        self.data_dir = Path(data_dir)
+        self.route_data = None
+
+    def load_route_from_json(self, filename):
+        filepath = self.data_dir.joinpath(filename)
+        with open(filepath, 'r') as f:
+            self.route_data = json.load(f)
+
+    def find_closest_speedplan_point(self, lat, lon):
+        if not self.route_data:
+            return None
+
+        closest_point = None
+        min_distance = float('inf')
+
+        for leg in self.route_data.get('legs', []):
+            for step in leg.get('steps', []):
+                for point in step.get('speedplan', []):
+                    p_lat = point.get('lat')
+                    p_lon = point.get('lon')
+                    if p_lat is not None and p_lon is not None:
+                        distance = (lat - p_lat)**2 + (lon - p_lon)**2  # Euclidean distance squared
+                        if distance < min_distance:
+                            min_distance = distance
+                            closest_point = point
+        return closest_point
+
+
+def _test_route_matcher():
+    # Create a dummy data directory for testing
+    test_data_dir = Path("./test_data")
+    test_data_dir.mkdir(exist_ok=True)
+
+    # Create a dummy route file
+    with open(test_data_dir.joinpath("test_route.json"), "w") as f:
+        f.write("""
+        {
+            "legs": [
+                {
+                    "steps": [
+                        {
+                            "speedplan": [
+                                {"lat": 34.052235, "lon": -118.243683, "speed": 10},
+                                {"lat": 34.052235, "lon": -118.243684, "speed": 20},
+                                {"lat": 34.052236, "lon": -118.243685, "speed": 30}
+                            ]
+                        }
+                    ]
+                }
+            ]
+        }
+        """)
+
+    matcher = RouteMatcher(test_data_dir)
+    matcher.load_route_from_json("test_route.json")
+
+    # Test case 1: Point exactly on a speedplan point
+    closest = matcher.find_closest_speedplan_point(34.052235, -118.243683)
+    print(f"Test 1 (exact match): {closest}")
+    assert closest == {"lat": 34.052235, "lon": -118.243683, "speed": 10}
+
+    # Test case 2: Point close to a speedplan point
+    closest = matcher.find_closest_speedplan_point(34.052235, -118.2436835) # Slightly off
+    print(f"Test 2 (close match): {closest}")
+    assert closest == {"lat": 34.052235, "lon": -118.243683, "speed": 10}
+
+    # Test case 3: Point closer to the second speedplan point
+    closest = matcher.find_closest_speedplan_point(34.052235, -118.2436845) # Closer to second
+    print(f"Test 3 (second point): {closest}")
+    assert closest == {"lat": 34.052235, "lon": -118.243684, "speed": 20}
+
+    # Clean up dummy data directory
+    os.remove(test_data_dir.joinpath("test_route.json"))
+    os.rmdir(test_data_dir)
+
+    print("All tests passed!")
+
+
+
+if __name__ == "__main__":
+    _test_route_matcher()
+    
