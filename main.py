@@ -53,6 +53,9 @@ class E2PilotAutopi:
             # self.j1939_listener.scan_pgns()
 
         self.current_speed = -1
+        self.suggest_speed = -10
+        # The tolerance for following suggested speed
+        self.suggest_speed_tol = 5
         self.lat = -1; self.lon = -1
         self.route_matcher.load_route_from_json("test.2025-07-04.opt.JuMP.route.json")
 
@@ -142,7 +145,19 @@ class E2PilotAutopi:
 
         pt = self.route_matcher.update_pt(self.lat, self.lon)
         sug_spd = pt.get('veh_state', {}).get('speed', -1)
+        self.suggest_speed = sug_spd
         self.display_manager.set_suggest_speed(sug_spd)
+
+    def is_within_suggest_speed(self):
+        if self.suggest_speed < 0:
+            return False
+        if self.current_speed < 0:
+            return False
+
+        if abs(self.current_speed - self.suggest_speed) <= self.suggest_speed_tol:
+            return True
+        return False
+
 
     def setup_mqtt_location_client(self):
         self.mqtt_location_client = mqtt.Client()

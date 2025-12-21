@@ -7,3 +7,4 @@ logs/
 *_old.py
 tmp.py
 *.csv
+.DS_Store
