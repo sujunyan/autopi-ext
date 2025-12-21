@@ -1,16 +1,11 @@
-import threading
-import time
-import logging
 import j1939
 import subprocess
 from j1939Parser import J1939Parser
-from pathlib import Path
-from datetime import datetime
-import csv
-import os
+
 import paho.mqtt.client as mqtt
-import json
-import threading
+import json, time, threading, os, logging, csv
+from datetime import datetime
+from pathlib import Path
 
 
 logger = logging.getLogger("e2pilot_autopi")
