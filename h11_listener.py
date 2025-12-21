@@ -51,7 +51,8 @@ class H11Listener:
     def save_raw_data(self, raw_line):
         with open(self.log_file, "a") as f:
             timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
-            f.write(f"{timestamp} - {raw_line}\n")
+            # f.write(f"{timestamp} - {raw_line}\n")
+            f.write(f"{raw_line}\n")
 
     def parse_and_publish(self, raw_line):
         """解析 NMEA 数据并发布到 MQTT"""

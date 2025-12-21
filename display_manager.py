@@ -48,7 +48,7 @@ def find_nextion_serial_port(baud_rate=115200, timeout=2):
                         if TEST_COMMAND in received_data:
                             logger.debug(f"Got looped data {received_data}")
                         elif received_data[0] == 0x66:
-                            logger.debug(f"Got seems good data: {received_data}")
+                            logger.info(f"Got seems good data: {received_data}. Return the port.")
                             return port
                         # Check if the response contains the expected 'dp=' format
                         # if b'dp=' in received_data:
@@ -65,14 +65,14 @@ def find_nextion_serial_port(baud_rate=115200, timeout=2):
             else:
                 logger.debug(f"Port {port} did not return any data.")
         except serial.SerialException as e:
-            logger.debug(f"Failed to open or communicate with port {port}: {e}")
+            logger.error(f"Failed to open or communicate with port {port}: {e}")
         except Exception as e:
-            logger.debug(f"An unknown error occurred on port {port}: {e}")
+            logger.error(f"An unknown error occurred on port {port}: {e}")
         finally:
             if ser and ser.is_open:
                 ser.close()
                 logger.debug(f"Closed port {port}")
-    logger.debug("No correct Nextion serial display device found.")
+    logger.warn("No correct Nextion serial display device found.")
     return None
 
 class DisplayManager:
@@ -83,7 +83,7 @@ class DisplayManager:
         self.setup_serial()
 
     def setup_serial(self):
-        logger.debug("Setup serial port for display manager")
+        logger.info("Setup serial port for display manager")
         ser_port = find_nextion_serial_port()
         self.last_send_suggest_ts = time.time()
         if ser_port is not None:
@@ -103,6 +103,7 @@ class DisplayManager:
         if self.enable:
             result = self.ser.write(cmd.encode("utf-8"))
             self.ser.write(bytes.fromhex('ff ff ff'))
+            # logger.debug(f"Sent cmd: {cmd}")
 
     def set_grade(self, grade):
         grade = int(grade)
@@ -150,10 +151,11 @@ class DisplayManager:
         # logger.debug(f"writing speed: {speed} angle: {angle}")
         self.send_cmd(f"speedmeter.val={angle}")
         if abs(time.time() - self.last_send_suggest_ts) > 0.1:
+            pass
             # delta_v = random.randint(-5, 5)
             # self.set_suggest_speed(speed + delta_v)
-            self.set_suggest_speed(speed)
-            self.last_send_suggest_ts = time.time()
+            # self.set_suggest_speed(speed)
+            # self.last_send_suggest_ts = time.time()
 
     
     def close(self):

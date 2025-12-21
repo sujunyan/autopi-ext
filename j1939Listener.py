@@ -112,7 +112,8 @@ class J1939Listener:
         """
         if not self.enable:
             logger.error("J1939Listener is not enabled. Please run setup() first.")
-        
+
+        self.scan_pgns()
         while self.enable:
             self.main_loop_once()
             time.sleep(0.1)
@@ -316,7 +317,7 @@ class J1939Listener:
             # returning true keeps the timer event active
             return True
 
-        logger.debug(f"Request can with pgn {pgn}")
+        # logger.debug(f"Request can with pgn {pgn}")
 
         # def send_request(self, data_page, pgn, destination):
 

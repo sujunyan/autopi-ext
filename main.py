@@ -15,7 +15,7 @@ import threading
 logging.getLogger('j1939').setLevel(logging.DEBUG)
 logging.getLogger('can').setLevel(logging.DEBUG)
 
-USE_1939 = False
+USE_1939 = True
 
 class E2PilotAutopi:
     def __init__(self):
@@ -43,15 +43,17 @@ class E2PilotAutopi:
 
 
         # heartbeat related threshold
-        update_time_threshold = 3.0
+        self.update_time_threshold = 3.0
         self.last_obd_speed_time = time.time()
         self.last_h11_location_time = time.time()
+        self.last_heart_beat_time = time.time()
 
-        if self.use_1939:
+        # if self.use_1939:
             ## Note that CAN interface might need some time to setup...
-            self.j1939_listener.scan_pgns()
+            # self.j1939_listener.scan_pgns()
 
         self.current_speed = -1
+        self.lat = -1; self.lon = -1
         self.route_matcher.load_route_from_json("test.2025-07-04.opt.JuMP.route.json")
 
     def loop_start(self):
@@ -62,7 +64,10 @@ class E2PilotAutopi:
     def main_loop(self):
         self.loop_start()
         while True:
-            time.sleep(0.1)
+            if (time.time() - self.last_heart_beat_time) > 10.0:
+                logger.info("Heartbeat msg...")
+                self.last_heart_beat_time = time.time()
+            time.sleep(0.5)
 
     def close(self):
         if self.use_1939:
