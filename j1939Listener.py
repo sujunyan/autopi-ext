@@ -64,7 +64,7 @@ class J1939Listener:
         self.current_data = {}
 
         ## the path to store the raw can data
-        ts = datetime.now().strftime("%Y%m%d_%H")
+        ts = datetime.now().strftime("%Y%m%d_%H%M")
         self.raw_can_csv_path = data_dir.joinpath(f"j1939_raw_data_{ts}.csv")
         self.raw_can_csv_path.parent.mkdir(parents=True, exist_ok=True)
         # print(data_dir)

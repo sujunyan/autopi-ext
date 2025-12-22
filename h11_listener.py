@@ -21,7 +21,7 @@ class H11Listener:
         self.port = port
         self.baud = baud
 
-        ts = datetime.now().strftime("%Y%m%d_%H")
+        ts = datetime.now().strftime("%Y%m%d_%H%M")
         self.log_file = data_dir.joinpath(f"h11_raw_{ts}.txt")
         
         # MQTT 配置

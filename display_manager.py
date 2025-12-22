@@ -137,6 +137,9 @@ class DisplayManager:
 
         
     def set_speed(self, speed):
+        if speed == None:
+            logger.warn("Got a None speed in display manager.")
+            return
         speed = int(speed)
         self.send_cmd(f"speed_num.val={speed}")
 

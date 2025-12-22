@@ -109,16 +109,22 @@ class E2PilotAutopi:
             speed = data['value']
             self.current_speed = speed
             self.last_obd_speed_time = time.time()
-        elif msg.topic == "obd/SPEED":
+            logger.debug(f"Got speed from j1939: {self.current_speed}")
+        elif msg.topic == "obd/speed":
+            self.current_speed = data['value']
+            logger.debug(f"Got speed from obd/speed: {self.current_speed}")
             self.last_obd_speed_time = time.time()
         elif msg.topic == "h11gps/speed":
             speed = data['speed_kmh']
             if not self.is_obd_alive():
+                logger.debug(f"Got speed from h11gps: {self.current_speed}")
                 self.current_speed = speed
             
             # print(self.current_speed)
             # logger.debug(f"Received h11gps speed: {speed} km/h")
 
+        logger.debug(f"on_speed_message got {msg.topic} data: {data} speed: {self.current_speed}")
+        
         self.display_manager.set_speed(self.current_speed)
 
     def setup_mqtt_speed_client(self):
@@ -194,9 +200,13 @@ class E2PilotAutopi:
                 self.alt = data['alt']
 
         pt = self.route_matcher.update_pt(self.lat, self.lon)
-        sug_spd = pt.get('veh_state', {}).get('speed', -1)
-        self.suggest_speed = sug_spd
-        self.display_manager.set_suggest_speed(sug_spd)
+
+        if pt != None:
+            sug_spd = pt.get('veh_state', {}).get('speed', -1)
+            self.suggest_speed = sug_spd
+            self.display_manager.set_suggest_speed(sug_spd)
+        else:
+            logger.warn("Got an empty point in the speed plan...")
 
     def is_within_suggest_speed(self):
         if self.suggest_speed < 0:
