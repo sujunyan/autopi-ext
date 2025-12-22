@@ -30,6 +30,10 @@ class E2PilotAutopi:
         self.display_manager = DisplayManager()
         self.h11_listener = H11Listener(mqtt_broker=self.mqtt_broker)
         self.route_matcher = RouteMatcher()
+        self.trip_distance = 0.0
+        self.init_vehicle_distance = -1
+        self.follow_range = 0.0
+        self.follow_rate = 0.0
     
     def setup(self):
         if self.use_1939:
@@ -127,6 +131,51 @@ class E2PilotAutopi:
         ])
         # Start the MQTT client loop in the background
         self.mqtt_speed_client.loop_start()
+
+    def setup_mqtt_distance_client(self):
+        self.mqtt_distance_client = mqtt.Client()
+        self.mqtt_distance_client.on_message = self.on_distance_message
+        self.mqtt_distance_client.connect(self.mqtt_broker, self.mqtt_port)
+        self.mqtt_distance_client.subscribe([
+            ("j1939/High_Resolution_Total_Vehicle_Distance", 0),
+            ("j1939/Total_Vehicle_Distance", 0),
+            ("obd/DISTANCE_SINCE_DTC_CLEAR", 0),
+        ])
+        # Start the MQTT client loop in the background
+        self.mqtt_speed_client.loop_start()
+    
+    def on_distance_message(self, client, userdata, msg):
+        payload = msg.payload.decode()
+        data = json.loads(payload)
+        ## distance in km
+        self.last_distance_range = self.distance_range
+        if msg.topic == "j1939/High_Resolution_Total_Vehicle_Distance":
+            self.hr_vehicle_distance = data['value'] / 1000.0
+            self.vehicle_distance = self.hr_vehicle_distance
+        elif msg.topic == "j1939/Total_Vehicle_Distance" and not hasattr(self, 'hr_vehicle_distance'):
+            self.vehicle_distance = data['value'] 
+        elif msg.topic == "obd/DISTANCE_SINCE_DTC_CLEAR":
+            self.vehicle_distance = data['value'] 
+
+        logger.debug(f"Vehicle distance: {self.vehicle_distance} km")
+        
+        if self.init_vehicle_distance == -1:
+            self.init_vehicle_distance = self.vehicle_distance
+
+        self.last_trip_distance = self.trip_distance
+        self.trip_distance = self.vehicle_distance - self.init_vehicle_distance
+
+        if self.last_trip_distance != 0.0:
+            delta_d = self.trip_distance - self.last_trip_distance
+            if delta_d > 0 and self.is_within_suggest_speed():
+                self.follow_range += delta_d
+                self.follow_rate = self.follow_range / self.trip_distance if self.trip_distance > 0 else 0.0
+                self.display_manager.set_follow_rate(self.follow_rate)
+                self.display_manager.set_follow_range(self.follow_range)
+        
+        
+        self.display_manager.set_distance(self.trip_distance)
+
 
     def on_location_message(self, client, userdata, msg):
         payload = msg.payload.decode()
