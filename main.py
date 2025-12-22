@@ -117,13 +117,13 @@ class E2PilotAutopi:
         elif msg.topic == "h11gps/speed":
             speed = data['speed_kmh']
             if not self.is_obd_alive():
-                logger.debug(f"Got speed from h11gps: {self.current_speed}")
+                logger.debug(f"OBD might not be alive, got speed from h11gps: {self.current_speed}")
                 self.current_speed = speed
             
             # print(self.current_speed)
             # logger.debug(f"Received h11gps speed: {speed} km/h")
 
-        logger.debug(f"on_speed_message got {msg.topic} data: {data} speed: {self.current_speed}")
+        # logger.debug(f"on_speed_message got {msg.topic} data: {data} speed: {self.current_speed}")
         
         self.display_manager.set_speed(self.current_speed)
 
@@ -176,13 +176,11 @@ class E2PilotAutopi:
             delta_d = self.trip_distance - self.last_trip_distance
             if delta_d > 0 and self.is_within_suggest_speed():
                 self.follow_range += delta_d
-                self.follow_rate = self.follow_range / self.trip_distance if self.trip_distance > 0 else 0.0
-                self.display_manager.set_follow_rate(self.follow_rate)
+                self.follow_rate = (1.0 * self.follow_range) / self.trip_distance if self.trip_distance > 0 else 0.0
+                self.display_manager.set_follow_rate(self.follow_rate * 100)
                 self.display_manager.set_follow_range(self.follow_range)
         
-        
         self.display_manager.set_distance(self.trip_distance)
-
 
     def on_location_message(self, client, userdata, msg):
         payload = msg.payload.decode()
@@ -256,5 +254,4 @@ def main():
 if __name__ == '__main__':
     main()
 
-# Example Usage of J1939Parser (for testing purposes, can be removed later)
 
