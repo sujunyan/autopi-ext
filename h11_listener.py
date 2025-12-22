@@ -8,6 +8,7 @@ import logging
 from pathlib import Path
 from datetime import datetime
 import threading
+import subprocess
 
 from logger import config_logger 
 
@@ -15,6 +16,26 @@ logger = logging.getLogger("e2pilot_autopi")
 
 current_dir = Path(__file__).resolve().parent
 data_dir = current_dir.joinpath("data/h11")
+
+
+import subprocess
+def bluetooth_bind(port_num ,device_name):
+    # Split the command into a list of strings
+    command = ["sudo", "rfcomm", "bind", str(port_num), device_name, "1"]
+
+    
+    try:
+        # execute the command
+        # capture_output=True stores the result for debugging
+        # text=True returns strings instead of bytes
+        result = subprocess.run(command, capture_output=True, text=True, check=True)
+        
+        logger.info(f"Success: Device bound to /dev/rfcomm{port_num}")
+        
+    except subprocess.CalledProcessError as e:
+        logger.error(f"Error occurred: {e.stderr}")
+
+
 
 class H11Listener:
     def __init__(self, port='/dev/rfcomm0', baud=9600, mqtt_broker="localhost"):
@@ -33,9 +54,19 @@ class H11Listener:
         self.ser = None
         self.enable = False
 
+        self.device_address = "4D:B4:39:2A:93:2D"
+        self.port_num = 0
+
+        # sudo rfcomm bind 0 4D:B4:39:2A:93:2D 1 
+
     def setup(self):
         try:
             # 连接 MQTT
+            if not Path(self.port).exists():
+                logger.info("Binding the bluetooth port.")
+                bluetooth_bind(self.port_num, self.device_address)
+                time.sleep(2.0)
+
             self.client.connect(self.mqtt_broker, self.mqtt_port, 60)
             self.client.loop_start()
             # logger.debug(f"Connected to MQTT Broker: {self.mqtt_broker}")
