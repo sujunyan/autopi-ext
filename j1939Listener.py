@@ -151,6 +151,7 @@ class J1939Listener:
 
 
             65266: default_interval,  # Fuel Rate (Liquid), Instantaneous Fuel Economy, Average Fuel Economy
+            65248: default_interval,  # Trip Distance, Total Vehicle Distance
             65199: slow_interval,  # Trip Fuel (Gaseous), Total Fuel Used (Gaseous)
             65257: slow_interval,  # Trip Fuel (Liquid), Total Fuel Used (Liquid)
 
@@ -167,7 +168,6 @@ class J1939Listener:
             65244: slower_interval,  # Total Idle Fuel Used, Total Idle Hours
 
             65217: slower_interval,  # High Resolution Total Vehicle Distance, High Resolution Trip Distance
-            65248: slower_interval,  # Trip Distance, Total Vehicle Distance
 
             65262: no_interval,  # Fuel Temperature
 
@@ -216,12 +216,14 @@ class J1939Listener:
         Filtering function for MQTT topics.
         """
 
+        # return True
         topic_subtrings = [
                         "Vehicle_Speed", 
                         "Fuel_Level",  
                         "Fuel_Rate",
                         "Fuel_Used",
                         "Vehicle_Distance", 
+                        "Distance"
                         "Pitch"
                     ]
         for substr in topic_subtrings:

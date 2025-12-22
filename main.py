@@ -15,7 +15,7 @@ import threading
 logging.getLogger('j1939').setLevel(logging.DEBUG)
 logging.getLogger('can').setLevel(logging.DEBUG)
 
-USE_1939 = True
+USE_1939 = False
 
 class E2PilotAutopi:
     def __init__(self):
@@ -42,6 +42,7 @@ class E2PilotAutopi:
         self.display_manager.setup()
         self.setup_mqtt_speed_client()
         self.setup_mqtt_location_client()
+        self.setup_mqtt_distance_client()
 
         self.h11_listener.setup()
 
@@ -126,7 +127,7 @@ class E2PilotAutopi:
         self.mqtt_speed_client.connect(self.mqtt_broker, self.mqtt_port)
         self.mqtt_speed_client.subscribe([
             ("j1939/Wheel-Based_Vehicle_Speed", 0),
-            ("obd/SPEED", 0),
+            ("obd/speed", 0),
             ("h11gps/speed", 0)
         ])
         # Start the MQTT client loop in the background
@@ -139,25 +140,25 @@ class E2PilotAutopi:
         self.mqtt_distance_client.subscribe([
             ("j1939/High_Resolution_Total_Vehicle_Distance", 0),
             ("j1939/Total_Vehicle_Distance", 0),
-            ("obd/DISTANCE_SINCE_DTC_CLEAR", 0),
+            ("obd/distance_since_dtc_clear", 0),
         ])
         # Start the MQTT client loop in the background
-        self.mqtt_speed_client.loop_start()
+        self.mqtt_distance_client.loop_start()
     
     def on_distance_message(self, client, userdata, msg):
         payload = msg.payload.decode()
         data = json.loads(payload)
+        # logger.info("Distance message called.")
         ## distance in km
-        self.last_distance_range = self.distance_range
         if msg.topic == "j1939/High_Resolution_Total_Vehicle_Distance":
             self.hr_vehicle_distance = data['value'] / 1000.0
             self.vehicle_distance = self.hr_vehicle_distance
         elif msg.topic == "j1939/Total_Vehicle_Distance" and not hasattr(self, 'hr_vehicle_distance'):
             self.vehicle_distance = data['value'] 
-        elif msg.topic == "obd/DISTANCE_SINCE_DTC_CLEAR":
+        elif msg.topic == "obd/distance_since_dtc_clear":
             self.vehicle_distance = data['value'] 
 
-        logger.debug(f"Vehicle distance: {self.vehicle_distance} km")
+        # logger.debug(f"Vehicle distance: {self.vehicle_distance} km")
         
         if self.init_vehicle_distance == -1:
             self.init_vehicle_distance = self.vehicle_distance
@@ -222,6 +223,8 @@ class E2PilotAutopi:
 def main():
     config_logger(logging.DEBUG)
 
+    logger.info("-----------------------------------------------")
+    logger.info("-----------------------------------------------")
     logger.info("Initializing E2Pilot Application")
     
     try:

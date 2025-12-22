@@ -159,5 +159,5 @@ class DisplayManager:
 
     
     def close(self):
-        if self.ser is not None:
+        if self.ser is not None and self.ser.is_open:
             self.ser.close()

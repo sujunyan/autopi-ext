@@ -101,6 +101,7 @@ class H11Listener:
             logger.warn("h11 listener is not set up properly.")
             return
 
+        logger.info("-----------------------------------------------")
         logger.info("Starting GPS Data Stream...")
         try:
             while self.enable and self.ser.is_open:
@@ -118,6 +119,7 @@ class H11Listener:
 
     def close(self):
         self.enable = False
+        time.sleep(0.3)
         # if hasattr(self, 'thread') and self.thread.is_alive():
             # self.thread.join()
         if self.ser and self.ser.is_open:
