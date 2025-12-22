@@ -19,12 +19,19 @@ if [ $? -eq 0 ]; then
     echo "Download successful. Deleting data from remote server..."
     # Use ssh to execute the rm command on the remote server.
     # The -i flag specifies the identity file (private key).
-    ssh "$REMOTE_USER"@"$REMOTE_HOST" "rm -f \"${REMOTE_DATA_PATH}h11/*.txt\" \"${REMOTE_DATA_PATH}j1939/*.csv\""
+    ssh "$REMOTE_USER"@"$REMOTE_HOST" "rm -f ${REMOTE_DATA_PATH}h11/*.txt"
     if [ $? -eq 0 ]; then
-        echo "Remote data deleted successfully."
+        echo "Remote h11 data deleted successfully."
     else
-        echo "Error: Failed to delete remote data."
+        echo "Error: Failed to delete remote data h11."
     fi
+    ssh "$REMOTE_USER"@"$REMOTE_HOST" "rm -f ${REMOTE_DATA_PATH}j1939/*.csv"
+    if [ $? -eq 0 ]; then
+        echo "Remote j1939 data deleted successfully."
+    else
+        echo "Error: Failed to delete remote data j1939."
+    fi
+    
 else
     echo "Error: Download failed. Remote data not deleted."
 fi
