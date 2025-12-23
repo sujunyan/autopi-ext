@@ -23,7 +23,7 @@ logging.getLogger("can").setLevel(logging.DEBUG)
 USE_1939 = True
 route_name = [
     "test.2025-07-04.opt.JuMP.route.json",
-    "20251222_waichen_in.opt.JuMP.route.json",
+    "20251222_waichen_in.opt.JuMP.route.json", # from waichen to go outside
     "20251222_waichen_out.opt.JuMP.route.json",
 ][2]
 
@@ -124,7 +124,7 @@ class E2PilotAutopi:
             speed = data["value"]
             self.current_speed = speed
             self.last_obd_speed_time = time.time()
-            logger.debug(f"Got speed from j1939: {self.current_speed}")
+            # logger.debug(f"Got speed from j1939: {self.current_speed}")
         elif msg.topic == "obd/speed":
             self.current_speed = data["value"]
             logger.debug(f"Got speed from obd/speed: {self.current_speed}")
