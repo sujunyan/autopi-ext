@@ -54,7 +54,7 @@ class RouteMatcher:
                             min_distance = distance
                             closest_point = point
                             kleg, kstep, kpoint = ileg, istep, ipoint
-        logger.debug(f"Got closest pt {(kleg, kstep, kpoint)} with distance {min_distance:.3f} meters")
+        logger.debug(f"Got closest pt {(kleg, kstep, kpoint)} with distance {min_distance:.1f} meters")
         return closest_point
 
 
