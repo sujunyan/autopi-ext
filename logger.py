@@ -16,7 +16,7 @@ def config_logger(level=logging.INFO):
 
     rotate_handler = logging.handlers.RotatingFileHandler(
         log_filepath,
-        maxBytes=3 * 1024 * 1024,
+        maxBytes= 1 * 1024 * 1024,
         backupCount=10
     )
     rotate_handler.setFormatter(formatter)

@@ -59,7 +59,7 @@ class Obd2Listener(Listener):
         try:
             # Assuming autopi.obd.execute returns a result that can be JSON serialized
             # Note: Using autopi.obd.execute as per original code structure
-            response = autopi.obd.execute(["obd.query", command])
+            response = autopi.execute(["obd.query", command])
             return response
         except Exception as e:
             logger.error(f"Error querying OBD2 command {command}: {e}")

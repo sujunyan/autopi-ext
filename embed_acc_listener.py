@@ -63,7 +63,7 @@ class EmbedAccListener(Listener):
                 line = f"{self.last_timestamp},{self.acc['x']},{self.acc['y']},{self.acc['z']},{self.gyro['x']},{self.gyro['y']},{self.gyro['z']}"
                 self.save_raw_data(line)
                 self.last_save_time = current_time
-                logger.debug(f"Orientation - Pitch: {self.pitch:.2f}, Roll: {self.roll:.2f}")
+                # logger.debug(f"Orientation - Pitch: {self.pitch:.2f}, Roll: {self.roll:.2f}")
             
             # Optional: Log significant changes or specific thresholds if needed
             # logger.debug(f"ACC: {self.acc}, GYRO: {self.gyro}")
