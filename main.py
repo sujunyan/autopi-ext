@@ -11,6 +11,7 @@ import paho.mqtt.client as mqtt
 
 from display_manager import DisplayManager
 from h11_listener import H11Listener
+from embed_gps_listener import EmbedGpsListener
 from logger import config_logger, logger
 from j1939Listener import J1939Listener
 from obd2_listener import Obd2Listener
@@ -42,17 +43,12 @@ class E2PilotAutopi:
 
         self.display_manager = DisplayManager()
         self.h11_listener = H11Listener(mqtt_broker=self.mqtt_broker)
+        self.embed_gps_listener = EmbedGpsListener(mqtt_broker=self.mqtt_broker)
         self.route_matcher = RouteMatcher()
         self.trip_distance = 0.0
         self.init_vehicle_distance = -1
         self.follow_range = 0.0
         self.follow_rate = 0.0
-
-        # GPS distance tracking for track/pos
-        self.last_track_lat = None
-        self.last_track_lon = None
-        self.track_total_distance_m = 0.0
-        self.min_move_threshold_m = 20.0
 
     def setup(self):
         self.obd_listener.setup()
@@ -62,11 +58,13 @@ class E2PilotAutopi:
         self.setup_mqtt_distance_client()
 
         self.h11_listener.setup()
+        self.embed_gps_listener.setup()
 
         # heartbeat related threshold
         self.update_time_threshold = 3.0
         self.last_obd_speed_time = time.time()
         self.last_h11_location_time = time.time()
+        self.last_embed_gps_time = time.time()
         self.last_heart_beat_time = time.time()
 
         self.current_speed = -1
@@ -78,16 +76,10 @@ class E2PilotAutopi:
 
         self.route_matcher.load_route_from_json(route_name)
 
-        # Location logging for track/pos
-        ts = time.strftime("%Y%m%d_%H%M")
-        self.location_log_file = Path(__file__).resolve().parent.joinpath(
-            f"data/gps/track_pos_{ts}.csv"
-        )
-        self.location_log_file.parent.mkdir(parents=True, exist_ok=True)
-
     def loop_start(self):
         self.obd_listener.loop_start()
         self.h11_listener.loop_start()
+        self.embed_gps_listener.loop_start()
 
     def main_loop(self):
         self.loop_start()
@@ -98,19 +90,17 @@ class E2PilotAutopi:
             time.sleep(0.5)
 
     def close(self):
-        if self.obd_listener:
-            self.obd_listener.close()
-
         for client in [
             self.mqtt_distance_client,
             self.mqtt_speed_client,
             self.mqtt_location_client,
+            self.obd_listener,
+            self.h11_listener,
+            self.embed_gps_listener,
         ]:
             if client:
                 client.loop_stop()
                 client.disconnect()
-        if self.h11_listener:
-            self.h11_listener.close()
 
     def is_h11_alive(self):
         if self.h11_listener.enable == False:
@@ -131,7 +121,6 @@ class E2PilotAutopi:
             speed = data["value"]
             self.current_speed = speed
             self.last_obd_speed_time = time.time()
-            # logger.debug(f"Got speed from j1939: {self.current_speed}")
         elif msg.topic == "obd/speed":
             self.current_speed = data["value"]
             logger.debug(f"Got speed from obd/speed: {self.current_speed}")
@@ -169,6 +158,7 @@ class E2PilotAutopi:
                 ("j1939/High_Resolution_Total_Vehicle_Distance", 0),
                 ("j1939/Total_Vehicle_Distance", 0),
                 ("obd/distance_since_dtc_clear", 0),
+                ("h11gps/distance", 0),
             ]
         )
         # Start the MQTT client loop in the background
@@ -187,17 +177,14 @@ class E2PilotAutopi:
             self.vehicle_distance = data["value"]
         elif msg.topic == "obd/distance_since_dtc_clear":
             self.vehicle_distance = data["value"]
-        
-        
+
         if self.init_vehicle_distance == -1:
             self.init_vehicle_distance = self.vehicle_distance
 
-        ## TODO: handle h11gps total distance. We use the GPS for the trip distance directly because it has better accuracy.
-        if msg.topic == "h11gps/total_distance":
+        if msg.topic == "h11gps/distance" and "total_distance_m" in data:
             self.trip_distance = data["total_distance_m"] / 1000.0
-        # else:
-        #     self.trip_distance = self.vehicle_distance - self.init_vehicle_distance
-
+        elif not self.is_h11_alive():
+            self.trip_distance = self.vehicle_distance - self.init_vehicle_distance
 
         self.last_trip_distance = self.trip_distance
 
@@ -222,51 +209,12 @@ class E2PilotAutopi:
             self.last_h11_location_time = time.time()
             self.lat = data["lat"]
             self.lon = data["lon"]
-            self.alt = data["alt"]
         elif msg.topic == "track/pos":
+            self.last_embed_gps_time = time.time()
             if not self.is_h11_alive():
-                pos_data = data["loc"]
-                self.lat = pos_data["lat"]
-                self.lon = pos_data["lon"]
-                self.alt = data["alt"]
-
-            # Save track/pos location data to CSV
-            try:
-                file_exists = self.location_log_file.exists()
-                with open(self.location_log_file, mode="a", newline="") as f:
-                    writer = csv.writer(f)
-                    if not file_exists:
-                        writer.writerow(["timestamp", "lat", "lon", "alt"])
-
-                    lat = data.get("loc", {}).get("lat", data.get("lat"))
-                    lon = data.get("loc", {}).get("lon", data.get("lon"))
-                    alt = data.get("alt", -8848)
-                    ts = data.get("timestamp", time.time())
-                    writer.writerow([ts, lat, lon, alt])
-
-                    # Track distance for track/pos
-                    if lat is not None and lon is not None:
-                        if (
-                            self.last_track_lat is not None
-                            and self.last_track_lon is not None
-                        ):
-                            dist = haversine(
-                                self.last_track_lat, self.last_track_lon, lat, lon
-                            )
-                            if dist > self.min_move_threshold_m:
-                                self.track_total_distance_m += dist
-                                self.last_track_lat = lat
-                                self.last_track_lon = lon
-                        else:
-                            self.last_track_lat = lat
-                            self.last_track_lon = lon
-
-                        if not self.is_h11_alive():
-                            logger.debug(
-                                f"Track/pos total distance: {self.track_total_distance_m:.2f}m"
-                            )
-            except Exception as e:
-                logger.error(f"Error saving track/pos data: {e}")
+                pos_data = data.get("loc", {})
+                self.lat = pos_data.get("lat", self.lat)
+                self.lon = pos_data.get("lon", self.lon)
 
         pt = self.route_matcher.update_pt(self.lat, self.lon)
 

@@ -18,8 +18,8 @@ class EmbedGpsListener(Listener):
         self.last_lat = None
         self.last_lon = None
         self.total_distance_m = 0.0
-        self.min_move_threshold_m = 2.0
-        
+        self.min_move_threshold_m = 20.0
+
         # Current state
         self.lat = None
         self.lon = None
@@ -36,6 +36,13 @@ class EmbedGpsListener(Listener):
         except Exception as e:
             logger.error(f"EmbedGpsListener setup error: {e}")
             self.enable = False
+
+    def alive(self):
+        """Checks if the listener is active."""
+        if not self.enable:
+            return False
+
+        return True
 
     def on_message(self, client, userdata, msg):
         """Handles incoming track/pos messages."""
@@ -55,7 +62,8 @@ class EmbedGpsListener(Listener):
                 self.alt = alt
                 
                 # Save raw data (formatted as JSON string)
-                self.save_raw_data(payload)
+                line = f"{time.time()},{self.lat},{self.lon},{self.alt}"
+                self.save_raw_data(line)
                 
                 # Track distance
                 if self.last_lat is not None and self.last_lon is not None:
