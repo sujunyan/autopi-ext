@@ -87,8 +87,9 @@ class H11Listener(Listener):
                         self.last_lat = lat
                         self.last_lon = lon
 
-                data_payload["total_distance_m"] = self.total_distance_m
+                # data_payload["total_distance_m"] = self.total_distance_m
                 topic = f"{self.mqtt_topic_prefix}/position"
+                self.publish_mqtt(f"{self.mqtt_topic_prefix}/total_distance", {"total_distance_m": self.total_distance_m})
             elif isinstance(msg, pynmea2.types.talker.VTG):
                 data_payload.update(
                     {

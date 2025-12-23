@@ -110,15 +110,16 @@ class DisplayManager:
         self.send_cmd(f"grade.val={grade}")
 
     def set_distance(self, distance):
-        distance = int(distance)
+        # Convert to decimeters
+        distance = int(distance * 10)
         self.send_cmd(f"distance.val={distance}")
 
     def set_follow_rate(self, rate):
-        rate = int(rate)
+        rate = int(rate * 10)
         self.send_cmd(f"follow_rate.val={rate}")
 
     def set_follow_range(self, distance):
-        distance = int(distance)
+        distance = int(distance * 10)
         self.send_cmd(f"follow_range.val={distance}")
 
     def set_suggest_speed(self, speed):

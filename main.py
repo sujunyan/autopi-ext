@@ -15,6 +15,7 @@ from logger import config_logger, logger
 from j1939Listener import J1939Listener
 from obd2_listener import Obd2Listener
 from route_matcher import RouteMatcher
+from utils import haversine
 
 # Configure logging for j1939 and can libraries
 logging.getLogger("j1939").setLevel(logging.DEBUG)
@@ -23,7 +24,7 @@ logging.getLogger("can").setLevel(logging.DEBUG)
 USE_1939 = True
 route_name = [
     "test.2025-07-04.opt.JuMP.route.json",
-    "20251222_waichen_in.opt.JuMP.route.json", # from waichen to go outside
+    "20251222_waichen_in.opt.JuMP.route.json",  # from waichen to go outside
     "20251222_waichen_out.opt.JuMP.route.json",
 ][2]
 
@@ -46,6 +47,12 @@ class E2PilotAutopi:
         self.init_vehicle_distance = -1
         self.follow_range = 0.0
         self.follow_rate = 0.0
+
+        # GPS distance tracking for track/pos
+        self.last_track_lat = None
+        self.last_track_lon = None
+        self.track_total_distance_m = 0.0
+        self.min_move_threshold_m = 20.0
 
     def setup(self):
         self.obd_listener.setup()
@@ -180,12 +187,19 @@ class E2PilotAutopi:
             self.vehicle_distance = data["value"]
         elif msg.topic == "obd/distance_since_dtc_clear":
             self.vehicle_distance = data["value"]
-
+        
+        
         if self.init_vehicle_distance == -1:
             self.init_vehicle_distance = self.vehicle_distance
 
+        ## TODO: handle h11gps total distance. We use the GPS for the trip distance directly because it has better accuracy.
+        if msg.topic == "h11gps/total_distance":
+            self.trip_distance = data["total_distance_m"] / 1000.0
+        # else:
+        #     self.trip_distance = self.vehicle_distance - self.init_vehicle_distance
+
+
         self.last_trip_distance = self.trip_distance
-        self.trip_distance = self.vehicle_distance - self.init_vehicle_distance
 
         if self.last_trip_distance != 0.0:
             delta_d = self.trip_distance - self.last_trip_distance
@@ -229,6 +243,28 @@ class E2PilotAutopi:
                     alt = data.get("alt", -8848)
                     ts = data.get("timestamp", time.time())
                     writer.writerow([ts, lat, lon, alt])
+
+                    # Track distance for track/pos
+                    if lat is not None and lon is not None:
+                        if (
+                            self.last_track_lat is not None
+                            and self.last_track_lon is not None
+                        ):
+                            dist = haversine(
+                                self.last_track_lat, self.last_track_lon, lat, lon
+                            )
+                            if dist > self.min_move_threshold_m:
+                                self.track_total_distance_m += dist
+                                self.last_track_lat = lat
+                                self.last_track_lon = lon
+                        else:
+                            self.last_track_lat = lat
+                            self.last_track_lon = lon
+
+                        if not self.is_h11_alive():
+                            logger.debug(
+                                f"Track/pos total distance: {self.track_total_distance_m:.2f}m"
+                            )
             except Exception as e:
                 logger.error(f"Error saving track/pos data: {e}")
 
