@@ -26,8 +26,10 @@ logging.getLogger("can").setLevel(logging.DEBUG)
 USE_1939 = False
 route_name = [
     "test.2025-07-04.opt.JuMP.route.json",
-    "20251222_waichen_in.opt.JuMP.route.json",   # from outside to back to waichen
+    "20251222_waichen_in.opt.JuMP.route.json",   # idx=1 from outside to back to waichen
     "20251222_waichen_out.opt.JuMP.route.json", # from waichen to go outside
+    "20251223_youke_out.opt.JuMP.route.json", # idx = 3
+    "20251223_youke_in.opt.JuMP.route.json", # idx = 4
 ][1]
 
 
@@ -206,14 +208,17 @@ class E2PilotAutopi:
             delta_d = self.trip_distance - self.last_trip_distance
             if delta_d > 0 and self.is_within_suggest_speed():
                 self.follow_range += delta_d
+                # self.display_manager.set_follow_range(self.follow_range)
                 logger.debug(f"Got follow range {self.follow_range}")
+
+            # Do not compute follow rate at the beginning
+            if self.trip_distance > 0.1:
                 self.follow_rate = (
                     (1.0 * self.follow_range) / self.trip_distance
                     if self.trip_distance > 0
                     else 0.0
                 )
                 self.display_manager.set_follow_rate(self.follow_rate * 100)
-                self.display_manager.set_follow_range(self.follow_range)
 
         self.last_trip_distance = self.trip_distance
         self.display_manager.set_distance(self.trip_distance)
