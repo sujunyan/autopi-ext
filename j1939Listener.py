@@ -112,6 +112,7 @@ class J1939Listener:
         """
         if not self.enable:
             logger.error("J1939Listener is not enabled. Please run setup() first.")
+            return
 
         self.scan_pgns()
         while self.enable:
