@@ -135,9 +135,9 @@ class E2PilotAutopi:
             speed = data["value"]
             self.current_speed = speed
             self.last_obd_speed_time = time.time()
-        elif msg.topic == "obd/speed":
+        elif msg.topic == "obd2/speed":
             self.current_speed = data["value"]
-            logger.debug(f"Got speed from obd/speed: {self.current_speed}")
+            logger.debug(f"Got speed from obd2/speed: {self.current_speed}")
             self.last_obd_speed_time = time.time()
         elif msg.topic == "h11gps/speed":
             speed = data["speed_kmh"]
@@ -156,7 +156,7 @@ class E2PilotAutopi:
         self.mqtt_speed_client.subscribe(
             [
                 ("j1939/Wheel-Based_Vehicle_Speed", 0),
-                ("obd/speed", 0),
+                ("obd2/speed", 0),
                 ("h11gps/speed", 0),
             ]
         )
@@ -171,7 +171,7 @@ class E2PilotAutopi:
             [
                 ("j1939/High_Resolution_Total_Vehicle_Distance", 0),
                 ("j1939/Total_Vehicle_Distance", 0),
-                ("obd/distance_since_dtc_clear", 0),
+                ("obd2/distance_since_dtc_clear", 0),
                 ("h11gps/distance", 0),
             ]
         )
@@ -197,7 +197,7 @@ class E2PilotAutopi:
 
         if msg.topic == "h11gps/distance" and "total_distance_m" in data:
             self.trip_distance = data["total_distance_m"] / 1000.0
-        elif not self.is_h11_alive():
+        elif not self.is_h11_alive() and hasattr(self, "vehicle_distance"):
             self.trip_distance = self.vehicle_distance - self.init_vehicle_distance
         logger.debug(f"Got trip distance: {self.trip_distance}")
 
