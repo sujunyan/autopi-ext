@@ -15,7 +15,7 @@ import threading
 logging.getLogger('j1939').setLevel(logging.DEBUG)
 logging.getLogger('can').setLevel(logging.DEBUG)
 
-USE_1939 = False
+USE_1939 = True
 route_name = [
     "test.2025-07-04.opt.JuMP.route.json",
     "20251222_waichen_in.opt.JuMP.route.json",
