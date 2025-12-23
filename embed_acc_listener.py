@@ -16,7 +16,7 @@ class EmbedAccListener(Listener):
         self.gyro = {"x": 0.0, "y": 0.0, "z": 0.0}
         self.last_timestamp = None
         self.last_save_time = 0
-        self.save_interval = 0.3  # Save every xx seconds
+        self.save_interval = 0.2  # Save every xx seconds
 
     def setup(self):
         """Initializes the Embedded Accelerometer/Gyroscope listener."""
@@ -63,7 +63,7 @@ class EmbedAccListener(Listener):
                 line = f"{self.last_timestamp},{self.acc['x']},{self.acc['y']},{self.acc['z']},{self.gyro['x']},{self.gyro['y']},{self.gyro['z']}"
                 self.save_raw_data(line)
                 self.last_save_time = current_time
-                logger.debug(f"Orientation - Pitch: {pitch:.2f}, Roll: {roll:.2f}")
+                logger.debug(f"Orientation - Pitch: {self.pitch:.2f}, Roll: {self.roll:.2f}")
             
             # Optional: Log significant changes or specific thresholds if needed
             # logger.debug(f"ACC: {self.acc}, GYRO: {self.gyro}")
