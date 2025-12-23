@@ -1,5 +1,6 @@
 import json
 import logging
+import math
 import time
 from listener import Listener
 
@@ -29,6 +30,19 @@ class EmbedAccListener(Listener):
             logger.error(f"EmbedAccListener setup error: {e}")
             self.enable = False
 
+    def calculate_orientation(self, x, y, z):
+        """
+        Calculates pitch and roll from accelerometer data.
+        Returns (pitch, roll) in degrees.
+        """
+        # Roll: Rotation around X-axis
+        roll = math.atan2(y, z) * 180 / math.pi
+        
+        # Pitch: Rotation around Y-axis
+        pitch = math.atan2(-x, math.sqrt(y * y + z * z)) * 180 / math.pi
+        
+        return pitch, roll
+
     def on_message(self, client, userdata, msg):
         """Handles incoming acc/gyro_acc_xyz messages."""
         try:
@@ -39,6 +53,9 @@ class EmbedAccListener(Listener):
             self.acc = data.get("acc", self.acc)
             self.gyro = data.get("gyro", self.gyro)
             self.last_timestamp = data.get("_stamp")
+
+            # Calculate orientation
+            self.pitch, self.roll = self.calculate_orientation(self.acc['x'], self.acc['y'], self.acc['z'])
             
             # Save raw data with a timer to reduce the number of saved lines
             current_time = time.time()
@@ -46,6 +63,7 @@ class EmbedAccListener(Listener):
                 line = f"{self.last_timestamp},{self.acc['x']},{self.acc['y']},{self.acc['z']},{self.gyro['x']},{self.gyro['y']},{self.gyro['z']}"
                 self.save_raw_data(line)
                 self.last_save_time = current_time
+                logger.debug(f"Orientation - Pitch: {pitch:.2f}, Roll: {roll:.2f}")
             
             # Optional: Log significant changes or specific thresholds if needed
             # logger.debug(f"ACC: {self.acc}, GYRO: {self.gyro}")

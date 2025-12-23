@@ -11,6 +11,7 @@ import paho.mqtt.client as mqtt
 
 from display_manager import DisplayManager
 from h11_listener import H11Listener
+from embed_acc_listener import EmbedAccListener
 from embed_gps_listener import EmbedGpsListener
 from logger import config_logger, logger
 from j1939Listener import J1939Listener
@@ -43,6 +44,7 @@ class E2PilotAutopi:
 
         self.display_manager = DisplayManager()
         self.h11_listener = H11Listener(mqtt_broker=self.mqtt_broker)
+        self.embed_acc_listener = EmbedAccListener(mqtt_broker=self.mqtt_broker)
         self.embed_gps_listener = EmbedGpsListener(mqtt_broker=self.mqtt_broker)
         self.route_matcher = RouteMatcher()
         self.trip_distance = 0.0
@@ -58,6 +60,7 @@ class E2PilotAutopi:
         self.setup_mqtt_distance_client()
 
         self.h11_listener.setup()
+        self.embed_acc_listener.setup()
         self.embed_gps_listener.setup()
 
         # heartbeat related threshold
@@ -79,6 +82,7 @@ class E2PilotAutopi:
     def loop_start(self):
         self.obd_listener.loop_start()
         self.h11_listener.loop_start()
+        self.embed_acc_listener.loop_start()
         self.embed_gps_listener.loop_start()
 
     def main_loop(self):
@@ -93,6 +97,7 @@ class E2PilotAutopi:
         for ls in [
             self.obd_listener,
             self.h11_listener,
+            self.embed_acc_listener,
             self.embed_gps_listener,
         ]:
             if ls:
