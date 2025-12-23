@@ -1,16 +1,15 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
 # ATTENTION: This file is managed by AutoPi and any manual changes may be overwritten during update!
 
 # This file is copied from /usr/bin/ by me, to have a better way of executing autopi command in python
 
-from __future__ import print_function
-
 import json
 import sys
 import time
-import urllib2  # 'requests' is slow to load so we use 'urllib2'
+import urllib.request as urllib_request
+import urllib.error as urllib_error
 import uuid
 import yaml
 
@@ -39,18 +38,20 @@ def get_minion_id():
     return minion_id
 
 def retry_if_url_error(ex):
-    if not isinstance(ex, urllib2.HTTPError):
+    if not isinstance(ex, urllib_error.HTTPError):
         print(Colors.WARNING + "Local API not ready, retrying..." + Colors.ENDC)
-        return isinstance(ex, urllib2.URLError)
+        return isinstance(ex, urllib_error.URLError)
     return False
 
 @retry(retry_on_exception=retry_if_url_error, stop_max_attempt_number=30, wait_fixed=2000)
 def execute(cmd):
     url = "http://localhost:9000/dongle/{:}/execute/".format(get_minion_id())
-    data = json.dumps(cmd)
-    req = urllib2.Request(url, data, {"Content-Type": "application/json", "Content-Length": len(data) })
-    with closing(urllib2.urlopen(req)) as res:
-        return json.loads(res.read())
+    # In Python 3, data must be bytes
+    data = json.dumps(cmd).encode('utf-8')
+    req = urllib_request.Request(url, data, {"Content-Type": "application/json", "Content-Length": len(data) })
+    with closing(urllib_request.urlopen(req)) as res:
+        # In Python 3, res.read() returns bytes, must decode to string
+        return json.loads(res.read().decode('utf-8'))
 
 def state_output(res):
     errors = []
@@ -62,7 +63,8 @@ def state_output(res):
         if res[key]["result"]:
             print("{:}[ PASS ] {:}: {:} {:}".format(Colors.OKGREEN, res[key].get("__id__", "") or res[key].get("name", ""), res[key]["comment"], Colors.ENDC))
         else:
-            print("{:}[ FAIL ] {:}: {:} {:}".format(Colors.FAIL, res[key].get("__id__", "").encode('utf-8') or res[key].get("name", "").encode('utf-8'), res[key]["comment"].encode('utf-8'), Colors.ENDC))
+            # Removed .encode('utf-8') as Python 3 strings are unicode by default
+            print("{:}[ FAIL ] {:}: {:} {:}".format(Colors.FAIL, res[key].get("__id__", "") or res[key].get("name", ""), res[key]["comment"], Colors.ENDC))
             changes = res[key].get("changes", {})
             if changes:
                 print(yaml.safe_dump(changes, default_flow_style=False), end="")
@@ -83,8 +85,9 @@ def try_eval(val):
         return val.lower() in ["true", "yes"]
 
     try:
+       # Security note: eval is used as per original script
        return eval(val, {"__builtins__": None}, {})
-    except:
+    except Exception:
         return val
 
 def main():
@@ -100,8 +103,8 @@ def main():
 
     try:
         res = execute(args)
-    except urllib2.HTTPError as e:
-        response_text = e.read()
+    except urllib_error.HTTPError as e:
+        response_text = e.read().decode('utf-8')
         code = e.code if e.code != 500 else ''
         try:
             response_dict = json.loads(response_text)
@@ -119,3 +122,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
