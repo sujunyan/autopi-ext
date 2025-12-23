@@ -60,9 +60,10 @@ class RouteMatcher:
         closest_point = None
         min_distance = float("inf")
 
-        for leg in self.route_data.get("legs", []):
-            for step in leg.get("steps", []):
-                for point in step.get("speedplan", []):
+        kleg, kstep, kpoint = 0, 0, 0
+        for (ileg, leg) in enumerate(self.route_data.get("legs", [])):
+            for (istep, step) in enumerate(leg.get("steps", [])):
+                for (ipoint, point) in enumerate(step.get("speedplan", [])):
                     p_lat = point.get("lat")
                     p_lon = point.get("lon")
                     if p_lat is not None and p_lon is not None:
@@ -71,7 +72,8 @@ class RouteMatcher:
                         if distance < min_distance:
                             min_distance = distance
                             closest_point = point
-        logger.debug(f"Got closest pt with distance {min_distance:.3f} meters")
+                            kleg, kstep, kpoint = ileg, istep, ipoint
+        logger.debug(f"Got closest pt {(kleg, kstep, kpoint)} with distance {min_distance:.3f} meters")
         return closest_point
 
 
