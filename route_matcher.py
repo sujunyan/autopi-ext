@@ -46,6 +46,7 @@ class RouteMatcher:
                         if distance < min_distance:
                             min_distance = distance
                             closest_point = point
+        logger.debug(f"Got closest pt with distance {min_distance}")
         return closest_point
 
 

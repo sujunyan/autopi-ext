@@ -16,6 +16,11 @@ logging.getLogger('j1939').setLevel(logging.DEBUG)
 logging.getLogger('can').setLevel(logging.DEBUG)
 
 USE_1939 = False
+route_name = [
+    "test.2025-07-04.opt.JuMP.route.json",
+    "20251222_waichen_in.opt.JuMP.route.json",
+    "20251222_waichen_out.opt.JuMP.route.json",
+][2]
 
 class E2PilotAutopi:
     def __init__(self):
@@ -62,7 +67,8 @@ class E2PilotAutopi:
         # The tolerance for following suggested speed
         self.suggest_speed_tol = 5
         self.lat = -1; self.lon = -1
-        self.route_matcher.load_route_from_json("test.2025-07-04.opt.JuMP.route.json")
+       
+        self.route_matcher.load_route_from_json(route_name)
 
     def loop_start(self):
         if self.use_1939:
