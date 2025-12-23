@@ -96,7 +96,11 @@ class Listener:
 
     def close(self):
         """Cleans up resources and stops threads."""
-        logger.info(f"[{self.name}] Closing listener...")
+        if not self.enable:
+            # We seems close once in exiting the main loop, and then close mannually in the mainApp.close()... Need to resolve this issue...
+            # logger.info(f"[{self.name}] Closing listener but is not enabled, skip...", stack_info=True)
+            return
+        logger.info(f"[{self.name}] Closing listener...", stack_info=False)
         self.enable = False
         
         # Give the thread a moment to exit if called from outside

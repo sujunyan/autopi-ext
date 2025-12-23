@@ -175,12 +175,13 @@ class J1939Listener(Listener):
             writer.writerow([timestamp, pgn, data.hex()])
 
     def close(self):
-        super().close()
+        if self.ecu:
+             if getattr(self.ecu, '_bus', None) is not None:
+                self.ecu.disconnect()
         if self.ca:
             self.ca.stop()
-        if self.ecu:
-            self.ecu.disconnect()
-        logger.info("J1939Listener stopped.")
+        super().close()
+        # logger.info("J1939Listener stopped.")
 
     def setup_can_interface(self):
         can_channel = self.can_channel

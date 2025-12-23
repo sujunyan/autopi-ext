@@ -25,9 +25,9 @@ logging.getLogger("can").setLevel(logging.DEBUG)
 USE_1939 = True
 route_name = [
     "test.2025-07-04.opt.JuMP.route.json",
-    "20251222_waichen_in.opt.JuMP.route.json",  # from waichen to go outside
-    "20251222_waichen_out.opt.JuMP.route.json",
-][2]
+    "20251222_waichen_in.opt.JuMP.route.json",   # from outside to back to waichen
+    "20251222_waichen_out.opt.JuMP.route.json", # from waichen to go outside
+][1]
 
 
 class E2PilotAutopi:
@@ -90,13 +90,19 @@ class E2PilotAutopi:
             time.sleep(0.5)
 
     def close(self):
+        for ls in [
+            self.obd_listener,
+            self.h11_listener,
+            self.embed_gps_listener,
+        ]:
+            if ls:
+                ls.close()
+
         for client in [
             self.mqtt_distance_client,
             self.mqtt_speed_client,
             self.mqtt_location_client,
-            self.obd_listener,
-            self.h11_listener,
-            self.embed_gps_listener,
+            
         ]:
             if client:
                 client.loop_stop()
@@ -178,13 +184,14 @@ class E2PilotAutopi:
         elif msg.topic == "obd/distance_since_dtc_clear":
             self.vehicle_distance = data["value"]
 
-        if self.init_vehicle_distance == -1:
+        if self.init_vehicle_distance == -1 and hasattr(self, 'vehicle_distance'):
             self.init_vehicle_distance = self.vehicle_distance
 
         if msg.topic == "h11gps/distance" and "total_distance_m" in data:
             self.trip_distance = data["total_distance_m"] / 1000.0
         elif not self.is_h11_alive():
             self.trip_distance = self.vehicle_distance - self.init_vehicle_distance
+        logger.debug(f"Got trip distance: {self.trip_distance}")
 
         self.last_trip_distance = self.trip_distance
 
