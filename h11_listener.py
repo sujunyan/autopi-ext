@@ -1,4 +1,3 @@
-import json
 import logging
 import subprocess
 import time
@@ -9,6 +8,7 @@ import serial
 
 from listener import Listener
 from logger import config_logger
+from utils import haversine
 
 logger = logging.getLogger("e2pilot_autopi")
 
@@ -31,6 +31,12 @@ class H11Listener(Listener):
         self.ser = None
         self.device_address = "4D:B4:39:2A:93:2D"
         self.port_num = 0
+
+        # Distance tracking
+        self.last_lat = None
+        self.last_lon = None
+        self.total_distance_m = 0.0
+        self.min_move_threshold_m = 20.0  # Ignore movements smaller than 2 meters (noise)
 
     def setup(self):
         try:
@@ -58,15 +64,30 @@ class H11Listener(Listener):
                 "sentence_type": msg.sentence_type,
             }
             if isinstance(msg, pynmea2.types.talker.GGA):
+                lat, lon = msg.latitude, msg.longitude
                 data_payload.update(
                     {
-                        "lat": msg.latitude,
-                        "lon": msg.longitude,
+                        "lat": lat,
+                        "lon": lon,
                         "alt": msg.altitude,
                         "num_sats": msg.num_sats,
                         "status": "fix" if msg.gps_qual > 0 else "no_fix",
                     }
                 )
+
+                # Track distance if we have a valid fix
+                if msg.gps_qual > 0:
+                    if self.last_lat is not None and self.last_lon is not None:
+                        dist = haversine(self.last_lat, self.last_lon, lat, lon)
+                        if dist > self.min_move_threshold_m:
+                            self.total_distance_m += dist
+                            self.last_lat = lat
+                            self.last_lon = lon
+                    else:
+                        self.last_lat = lat
+                        self.last_lon = lon
+
+                data_payload["total_distance_m"] = self.total_distance_m
                 topic = f"{self.mqtt_topic_prefix}/position"
             elif isinstance(msg, pynmea2.types.talker.VTG):
                 data_payload.update(
