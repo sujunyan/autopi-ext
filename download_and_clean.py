@@ -3,7 +3,8 @@ import os
 import sys
 
 REMOTE_USER = "pi"
-REMOTE_HOST = "192.168.124.16"
+# REMOTE_HOST = "192.168.124.16"
+REMOTE_HOST = "autopi-2c72803a87e76f32092fbf0c2226cad2.local"
 REMOTE_DATA_PATH = "/home/pi/autopi-ext/data/"
 LOCAL_DOWNLOAD_PATH = "/Users/junyansu/dev/autopi-ext/"
 
