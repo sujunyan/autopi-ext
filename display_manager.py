@@ -106,7 +106,7 @@ class DisplayManager:
             # logger.debug(f"Sent cmd: {cmd}")
 
     def set_grade(self, grade):
-        grade = int(grade)
+        grade = int(grade * 10)
         self.send_cmd(f"grade.val={grade}")
 
     def set_distance(self, distance):

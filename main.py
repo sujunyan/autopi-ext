@@ -23,11 +23,13 @@ from utils import haversine
 logging.getLogger("j1939").setLevel(logging.DEBUG)
 logging.getLogger("can").setLevel(logging.DEBUG)
 
-USE_1939 = True
+USE_1939 = False
 route_name = [
     "test.2025-07-04.opt.JuMP.route.json",
-    "20251222_waichen_in.opt.JuMP.route.json",   # from outside to back to waichen
+    "20251222_waichen_in.opt.JuMP.route.json",   # idx=1 from outside to back to waichen
     "20251222_waichen_out.opt.JuMP.route.json", # from waichen to go outside
+    "20251223_youke_out.opt.JuMP.route.json", # idx = 3
+    "20251223_youke_in.opt.JuMP.route.json", # idx = 4
 ][1]
 
 
@@ -53,16 +55,6 @@ class E2PilotAutopi:
         self.follow_rate = 0.0
 
     def setup(self):
-        self.obd_listener.setup()
-        self.display_manager.setup()
-        self.setup_mqtt_speed_client()
-        self.setup_mqtt_location_client()
-        self.setup_mqtt_distance_client()
-
-        self.h11_listener.setup()
-        self.embed_acc_listener.setup()
-        self.embed_gps_listener.setup()
-
         # heartbeat related threshold
         self.update_time_threshold = 3.0
         self.last_obd_speed_time = time.time()
@@ -76,6 +68,19 @@ class E2PilotAutopi:
         self.suggest_speed_tol = 5
         self.lat = -1
         self.lon = -1
+        self.grade = 0.0
+        self.last_trip_distance = 0.0
+
+        self.obd_listener.setup()
+        self.display_manager.setup()
+        self.setup_mqtt_speed_client()
+        self.setup_mqtt_location_client()
+        self.setup_mqtt_distance_client()
+
+        self.h11_listener.setup()
+        self.embed_acc_listener.setup()
+        self.embed_gps_listener.setup()
+       
 
         self.route_matcher.load_route_from_json(route_name)
 
@@ -132,9 +137,9 @@ class E2PilotAutopi:
             speed = data["value"]
             self.current_speed = speed
             self.last_obd_speed_time = time.time()
-        elif msg.topic == "obd/speed":
+        elif msg.topic == "obd2/speed":
             self.current_speed = data["value"]
-            logger.debug(f"Got speed from obd/speed: {self.current_speed}")
+            logger.debug(f"Got speed from obd2/speed: {self.current_speed}")
             self.last_obd_speed_time = time.time()
         elif msg.topic == "h11gps/speed":
             speed = data["speed_kmh"]
@@ -153,7 +158,7 @@ class E2PilotAutopi:
         self.mqtt_speed_client.subscribe(
             [
                 ("j1939/Wheel-Based_Vehicle_Speed", 0),
-                ("obd/speed", 0),
+                ("obd2/speed", 0),
                 ("h11gps/speed", 0),
             ]
         )
@@ -168,7 +173,7 @@ class E2PilotAutopi:
             [
                 ("j1939/High_Resolution_Total_Vehicle_Distance", 0),
                 ("j1939/Total_Vehicle_Distance", 0),
-                ("obd/distance_since_dtc_clear", 0),
+                ("obd2/distance_since_dtc_clear", 0),
                 ("h11gps/distance", 0),
             ]
         )
@@ -194,24 +199,28 @@ class E2PilotAutopi:
 
         if msg.topic == "h11gps/distance" and "total_distance_m" in data:
             self.trip_distance = data["total_distance_m"] / 1000.0
-        elif not self.is_h11_alive():
+        elif not self.is_h11_alive() and hasattr(self, "vehicle_distance"):
             self.trip_distance = self.vehicle_distance - self.init_vehicle_distance
         logger.debug(f"Got trip distance: {self.trip_distance}")
 
-        self.last_trip_distance = self.trip_distance
 
         if self.last_trip_distance != 0.0:
             delta_d = self.trip_distance - self.last_trip_distance
             if delta_d > 0 and self.is_within_suggest_speed():
                 self.follow_range += delta_d
+                # self.display_manager.set_follow_range(self.follow_range)
+                logger.debug(f"Got follow range {self.follow_range}")
+
+            # Do not compute follow rate at the beginning
+            if self.trip_distance > 0.1:
                 self.follow_rate = (
                     (1.0 * self.follow_range) / self.trip_distance
                     if self.trip_distance > 0
                     else 0.0
                 )
                 self.display_manager.set_follow_rate(self.follow_rate * 100)
-                self.display_manager.set_follow_range(self.follow_range)
 
+        self.last_trip_distance = self.trip_distance
         self.display_manager.set_distance(self.trip_distance)
 
     def on_location_message(self, client, userdata, msg):
@@ -232,8 +241,15 @@ class E2PilotAutopi:
 
         if pt != None:
             sug_spd = pt.get("veh_state", {}).get("speed", -1)
+            sug_spd = sug_spd * 3.6
             self.suggest_speed = sug_spd
             self.display_manager.set_suggest_speed(sug_spd)
+            grade = pt.get("grade", None)
+            if grade != None:
+                grade *= 100
+                self.grade = grade
+                self.display_manager.set_grade(self.grade)
+            # logger.debug(f"Got sug_spd: {self.suggest_speed}, grade: {self.grade} %")
         else:
             logger.warn("Got an empty point in the speed plan...")
 
