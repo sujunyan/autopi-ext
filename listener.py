@@ -24,7 +24,7 @@ class Listener:
         # MQTT Configuration
         self.mqtt_broker = mqtt_broker
         self.mqtt_port = mqtt_port
-        self.mqtt_client = mqtt.Client()
+        self.mqtt_client = mqtt.Client(CallbackAPIVersion.VERSION2)
         
         # Data Logging
         self.current_dir = Path(__file__).resolve().parent

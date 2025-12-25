@@ -152,7 +152,7 @@ class E2PilotAutopi:
         self.display_manager.set_speed(self.current_speed)
 
     def setup_mqtt_speed_client(self):
-        self.mqtt_speed_client = mqtt.Client()
+        self.mqtt_speed_client = mqtt.Client(CallbackAPIVersion.VERSION2)
         self.mqtt_speed_client.on_message = self.on_speed_message
         self.mqtt_speed_client.connect(self.mqtt_broker, self.mqtt_port)
         self.mqtt_speed_client.subscribe(
@@ -166,7 +166,7 @@ class E2PilotAutopi:
         self.mqtt_speed_client.loop_start()
 
     def setup_mqtt_distance_client(self):
-        self.mqtt_distance_client = mqtt.Client()
+        self.mqtt_distance_client = mqtt.Client(CallbackAPIVersion.VERSION2)
         self.mqtt_distance_client.on_message = self.on_distance_message
         self.mqtt_distance_client.connect(self.mqtt_broker, self.mqtt_port)
         self.mqtt_distance_client.subscribe(
@@ -264,7 +264,7 @@ class E2PilotAutopi:
         return False
 
     def setup_mqtt_location_client(self):
-        self.mqtt_location_client = mqtt.Client()
+        self.mqtt_location_client = mqtt.Client(CallbackAPIVersion.VERSION2)
         self.mqtt_location_client.on_message = self.on_location_message
         self.mqtt_location_client.connect(self.mqtt_broker, self.mqtt_port)
         self.mqtt_location_client.subscribe(
