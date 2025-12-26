@@ -285,6 +285,17 @@ class E2PilotAutopi:
         )
         self.mqtt_location_client.loop_start()
 
+    def publish_virtual_location(self):
+        idx = self.route_matcher.current_pt_index
+        if idx == -1:
+            idx = 0
+            self.route_matcher.current_pt_index = 0
+        pt = self.route_matcher.all_speedplan_points[idx]
+        next_pt = self.route_matcher.get_next_speedplan_point()
+            lat = pt.get("lat", 0.0)
+            lon = pt.get("lon", 0.0)
+        pass
+
 
 def main():
     config_logger(logging.DEBUG)
