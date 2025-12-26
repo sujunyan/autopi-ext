@@ -39,36 +39,90 @@ class RouteMatcher:
         """
         Update the current closest point based on the given latitude and longitude.
         """
-        pt = self.find_closest_speedplan_point(lat, lon)
+        # pt = self.find_closest_speedplan_point(lat, lon)
+        self.pt = self.match_solution(lat, lon)
         self.latlon = (lat, lon)
         # logger.debug(f"Got current GPS {lat}, {lon}")
         return self.pt
 
-    def find_closest_speedplan_point(self, lat, lon):
-        if not self.route_data:
-            return None
+    def match_solution(self, lat, lon):
+        """
+        Match the given latitude and longitude to the closest point in the speedplan.
+        
+        Note that we need to make sure the layout is 
 
-        closest_point = None
-        min_distance = float("inf")
+        pt1 -> gps -> pt2
+        """
 
-        kpoint = -1
-        for (ipoint, point) in enumerate(self.all_speedplan_points):
-            p_lat = point.get("lat")
-            p_lon = point.get("lon")
-            if p_lat is not None and p_lon is not None:
-                # Use Haversine distance instead of Euclidean
-                distance = haversine(lat, lon, p_lat, p_lon)
-                if distance < min_distance:
-                    min_distance = distance
-                    closest_point = point
-                    kpoint = ipoint
+        max_angle = 0.0
+        matched_point = None
+        idx = 0
 
-        if closest_point:
-            self.current_pt_index = kpoint
+        for i in range(len(self.all_speedplan_points)-1):
+            p1 = self.all_speedplan_points[i]
+            p2 = self.all_speedplan_points[i+1]
 
-            
-        logger.debug(f"Got closest pt {kpoint} with distance {min_distance:.1f} meters")
-        return closest_point
+            if haversine(p1["lat"], p1["lon"], lat, lon) < 1e-2:
+                matched_point = p1
+                idx = i
+                break
+
+            angle = self.calculate_angle(p1, p2, latlon)
+            if angle > max_angle:
+                max_angle = angle
+                matched_point = p1
+                idx = i
+        
+        self.current_pt_index = idx
+
+        return matched_point
+
+    def calculate_angle(self, p1, p2, latlon):
+        """
+        Calculate the angle between the vector gps->p1 and gps->p2
+
+        return angle in radians
+        """
+        v1 = (p1["lat"] - latlon[0], p1["lon"] - latlon[1])
+        v2 = (p2["lat"] - latlon[0], p2["lon"] - latlon[1])
+
+        dot_product = v1[0]*v2[0] + v1[1]*v2[1]
+        mag_v1 = math.sqrt(v1[0]**2 + v1[1]**2)
+        mag_v2 = math.sqrt(v2[0]**2 + v2[1]**2)
+
+        if mag_v1 == 0 or mag_v2 == 0:
+            return 180.0
+
+        cos_angle = dot_product / (mag_v1 * mag_v2)
+        cos_angle = max(-1.0, min(1.0, cos_angle))
+
+        angle = math.acos(cos_angle)
+        return angle
+
+
+    # def find_closest_speedplan_point(self, lat, lon):
+
+    #     closest_point = None
+    #     min_distance = float("inf")
+
+    #     kpoint = -1
+    #     for (ipoint, point) in enumerate(self.all_speedplan_points):
+    #         p_lat = point.get("lat")
+    #         p_lon = point.get("lon")
+    #         if p_lat is not None and p_lon is not None:
+    #             # Use Haversine distance instead of Euclidean
+    #             distance = haversine(lat, lon, p_lat, p_lon)
+    #             if distance < min_distance:
+    #                 min_distance = distance
+    #                 closest_point = point
+    #                 kpoint = ipoint
+
+    #     if closest_point:
+    #         self.current_pt_index = kpoint
+
+    #         
+    #     logger.debug(f"Got closest pt {kpoint} with distance {min_distance:.1f} meters")
+    #     return closest_point
 
     def get_next_speedplan_point(self):
         if self.current_pt_index == -1:
