@@ -72,7 +72,7 @@ def find_nextion_serial_port(baud_rate=115200, timeout=2):
             if ser and ser.is_open:
                 ser.close()
                 logger.debug(f"Closed port {port}")
-    logger.warn("No correct Nextion serial display device found.")
+    logger.warning("No correct Nextion serial display device found.")
     return None
 
 class DisplayManager:
@@ -139,7 +139,7 @@ class DisplayManager:
         
     def set_speed(self, speed):
         if speed == None:
-            logger.warn("Got a None speed in display manager.")
+            logger.warning("Got a None speed in display manager.")
             return
         speed = int(speed)
         self.send_cmd(f"speed_num.val={speed}")

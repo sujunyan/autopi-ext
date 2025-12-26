@@ -41,6 +41,7 @@ class RouteMatcher:
         """
         pt = self.find_closest_speedplan_point(lat, lon)
         self.latlon = (lat, lon)
+        # logger.debug(f"Got current GPS {lat}, {lon}")
         return self.pt
 
     def find_closest_speedplan_point(self, lat, lon):
@@ -64,8 +65,6 @@ class RouteMatcher:
 
         if closest_point:
             self.current_pt_index = kpoint
-            if kpoint != len(self.all_speedplan_points) - 1:
-                pt_next = self.all_speedplan_points[kpoint + 1]
 
             
         logger.debug(f"Got closest pt {kpoint} with distance {min_distance:.1f} meters")
@@ -125,10 +124,6 @@ class RouteMatcher:
         ratio = dist_to_point1 / dist_total
         ratio = max(0.0, min(1.0, ratio))
         return ratio
-
-
-
-
 
 
 def _test_route_matcher():

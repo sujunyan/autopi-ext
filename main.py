@@ -8,6 +8,7 @@ import csv
 import can
 import j1939
 import paho.mqtt.client as mqtt
+from paho.mqtt.enums import CallbackAPIVersion
 
 from display_manager import DisplayManager
 from h11_listener import H11Listener
@@ -23,14 +24,14 @@ from utils import haversine
 logging.getLogger("j1939").setLevel(logging.DEBUG)
 logging.getLogger("can").setLevel(logging.DEBUG)
 
-USE_1939 = False
+USE_1939 = True
 route_name = [
     "test.2025-07-04.opt.JuMP.route.json",
     "20251222_waichen_in.opt.JuMP.route.json",   # idx=1 from outside to back to waichen
     "20251222_waichen_out.opt.JuMP.route.json", # from waichen to go outside
     "20251223_youke_out.opt.JuMP.route.json", # idx = 3
     "20251223_youke_in.opt.JuMP.route.json", # idx = 4
-][1]
+][3]
 
 
 class E2PilotAutopi:
@@ -239,15 +240,15 @@ class E2PilotAutopi:
 
         pt = self.route_matcher.update_pt(self.lat, self.lon)
 
-        if pt != None:
-            sug_spd, g = self.route_matcher.get_suggest_speed_and_grade()
-            if sug_spd >= 0:
-                sug_spd = sug_spd * 3.6
-                self.suggest_speed = sug_spd
-                self.display_manager.set_suggest_speed(sug_spd)
+        # if pt != None:
+        sug_spd, g = self.route_matcher.get_suggest_speed_and_grade()
+        if sug_spd >= 0:
+            sug_spd = sug_spd * 3.6
+            self.suggest_speed = sug_spd
+            self.display_manager.set_suggest_speed(sug_spd)
 
-            self.grade = g * 100
-            self.display_manager.set_grade(self.grade)
+        self.grade = g * 100
+        self.display_manager.set_grade(self.grade)
             
             # sug_spd = pt.get("veh_state", {}).get("speed", -1)
             # sug_spd = sug_spd * 3.6
@@ -259,8 +260,8 @@ class E2PilotAutopi:
             #     self.grade = grade
             #     self.display_manager.set_grade(self.grade)
             # logger.debug(f"Got sug_spd: {self.suggest_speed}, grade: {self.grade} %")
-        else:
-            logger.warn("Got an empty point in the speed plan...")
+        # else:
+        #     logger.warning("Got an empty point in the speed plan...")
 
     def is_within_suggest_speed(self):
         if self.suggest_speed < 0:

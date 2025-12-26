@@ -7,6 +7,7 @@ from datetime import datetime
 from pathlib import Path
 
 import paho.mqtt.client as mqtt
+from paho.mqtt.enums import CallbackAPIVersion
 
 logger = logging.getLogger("e2pilot_autopi")
 
