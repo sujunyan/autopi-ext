@@ -82,6 +82,18 @@ class DisplayManager:
     def setup(self):
         self.setup_serial()
 
+        time.sleep(0.2)
+        self.reset_display()
+    
+    def reset_display(self):
+        if self.enable:
+            self.set_grade(0.0) 
+            self.set_follow_range(0.0)
+            self.set_follow_rate(0.0)
+            self.set_distance(0.0)
+            self.set_suggest_speed(0.0)
+            self.set_speed(0.0)
+
     def setup_serial(self):
         logger.info("Setup serial port for display manager")
         ser_port = find_nextion_serial_port()
@@ -163,5 +175,7 @@ class DisplayManager:
 
     
     def close(self):
+        self.reset_display()
+        time.sleep(0.2)
         if self.ser is not None and self.ser.is_open:
             self.ser.close()

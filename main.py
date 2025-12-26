@@ -34,7 +34,9 @@ route_name = [
     "20251222_waichen_out.opt.JuMP.route.json", # from waichen to go outside
     "20251223_youke_out.opt.JuMP.route.json", # idx = 3
     "20251223_youke_in.opt.JuMP.route.json", # idx = 4
-][3]
+    "20251223_youke_in_10hz.route.json", # idx = 5
+    "20251223_youke_ont_10hz.route.json", # idx = 6
+][5]
 
 
 class E2PilotAutopi:
@@ -333,7 +335,7 @@ class E2PilotAutopi:
         if self.lat == -1 and self.lon == -1:
             self.lat, self.lon = lat1, lon1
 
-        increment = 0.06
+        increment = 0.20
         next_lat = self.lat + (lat2 - lat1) * increment
         next_lon = self.lon + (lon2 - lon1) * increment
         delta_dis = haversine(self.lat, self.lon, next_lat, next_lon)
