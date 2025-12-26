@@ -99,6 +99,8 @@ class RouteMatcher:
 
         spd = sug_spd1 * ratio + sug_spd2 * (1-ratio)
         grade = grade1 * ratio + grade2 * (1-ratio)
+
+        logger.debug(f"spd1 {sug_spd1} spd2 {sug_spd2} sug_spd {spd} ratio {ratio}")
             
         return (spd, grade)
 

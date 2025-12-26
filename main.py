@@ -110,7 +110,7 @@ class E2PilotAutopi:
                 self.last_heart_beat_time = time.time()
             if self.virtual_sim_mode:
                 self.publish_virtual_location()
-            time.sleep(0.5)
+            time.sleep(0.1)
 
     def close(self):
         for ls in [
@@ -189,6 +189,7 @@ class E2PilotAutopi:
                 ("j1939/Total_Vehicle_Distance", 0),
                 ("obd2/distance_since_dtc_clear", 0),
                 ("h11gps/distance", 0),
+                ("sim/distance", 0)
             ]
         )
         # Start the MQTT client loop in the background
@@ -197,24 +198,31 @@ class E2PilotAutopi:
     def on_distance_message(self, client, userdata, msg):
         payload = msg.payload.decode()
         data = json.loads(payload)
-        ## distance in km
-        if msg.topic == "j1939/High_Resolution_Total_Vehicle_Distance":
-            self.hr_vehicle_distance = data["value"] / 1000.0
-            self.vehicle_distance = self.hr_vehicle_distance
-        elif msg.topic == "j1939/Total_Vehicle_Distance" and not hasattr(
-            self, "hr_vehicle_distance"
-        ):
-            self.vehicle_distance = data["value"]
-        elif msg.topic == "obd/distance_since_dtc_clear":
-            self.vehicle_distance = data["value"]
+        if self.virtual_sim_mode:
+            # In virtual simulation mode, we manually set distance...
+            if msg.topic == "sim/distance":
+                self.trip_distance = data["total_distance_m"] / 1000.0
+            else:
+                return
+        else:
+            ## distance in km
+            if msg.topic == "j1939/High_Resolution_Total_Vehicle_Distance":
+                self.hr_vehicle_distance = data["value"] / 1000.0
+                self.vehicle_distance = self.hr_vehicle_distance
+            elif msg.topic == "j1939/Total_Vehicle_Distance" and not hasattr(
+                self, "hr_vehicle_distance"
+            ):
+                self.vehicle_distance = data["value"]
+            elif msg.topic == "obd/distance_since_dtc_clear":
+                self.vehicle_distance = data["value"]
 
-        if self.init_vehicle_distance == -1 and hasattr(self, 'vehicle_distance'):
-            self.init_vehicle_distance = self.vehicle_distance
+            if self.init_vehicle_distance == -1 and hasattr(self, 'vehicle_distance'):
+                self.init_vehicle_distance = self.vehicle_distance
 
-        if msg.topic == "h11gps/distance" and "total_distance_m" in data:
-            self.trip_distance = data["total_distance_m"] / 1000.0
-        elif not self.is_h11_alive() and hasattr(self, "vehicle_distance"):
-            self.trip_distance = self.vehicle_distance - self.init_vehicle_distance
+            if msg.topic == "h11gps/distance" and "total_distance_m" in data:
+                self.trip_distance = data["total_distance_m"] / 1000.0
+            elif not self.is_h11_alive() and hasattr(self, "vehicle_distance"):
+                self.trip_distance = self.vehicle_distance - self.init_vehicle_distance
         logger.debug(f"Got trip distance: {self.trip_distance}")
 
 
@@ -241,17 +249,21 @@ class E2PilotAutopi:
         payload = msg.payload.decode()
         data = json.loads(payload)
         if msg.topic == "h11gps/position":
+            if self.virtual_sim_mode:
+                return
             self.last_h11_location_time = time.time()
             self.lat = data["lat"]
             self.lon = data["lon"]
         elif msg.topic == "track/pos":
+            if self.virtual_sim_mode:
+                return
             self.last_embed_gps_time = time.time()
             if not self.is_h11_alive():
                 pos_data = data.get("loc", {})
                 self.lat = pos_data.get("lat", self.lat)
                 self.lon = pos_data.get("lon", self.lon)
         elif msg.topic == "sim/position":
-            if self.virual_sim_mode:
+            if self.virtual_sim_mode:
                 self.lat = data["lat"]
                 self.lon = data["lon"]
 
@@ -304,7 +316,7 @@ class E2PilotAutopi:
         self.mqtt_location_client.loop_start()
 
     def publish_virtual_location(self):
-        if (time.time() - self.last_publish_virtual_location_time) < 1.0:
+        if (time.time() - self.last_publish_virtual_location_time) < 0.2:
             return
 
         idx = self.route_matcher.current_pt_index
@@ -321,9 +333,15 @@ class E2PilotAutopi:
         if self.lat == -1 and self.lon == -1:
             self.lat, self.lon = lat1, lon1
 
-        increment = 0.1
-        self.lat += (lat2 - lat1) * increment
-        self.lon += (lon2 - lon1) * increment
+        increment = 0.06
+        next_lat = self.lat + (lat2 - lat1) * increment
+        next_lon = self.lon + (lon2 - lon1) * increment
+        delta_dis = haversine(self.lat, self.lon, next_lat, next_lon)
+        logger.debug(f"Update delta_dis: {delta_dis}, latlon: ({self.lat}, {self.lon}), next latlon {next_lat}, {next_lon}")
+        self.lat = next_lat
+        self.lon = next_lon
+
+        distance = self.trip_distance * 1000.0 + delta_dis
 
         self.mqtt_location_client.publish(
             "sim/position",
@@ -333,6 +351,10 @@ class E2PilotAutopi:
                     "lon": self.lon,
                 }
             ),
+        )
+        self.mqtt_location_client.publish(
+            "sim/distance",
+            json.dumps({"total_distance_m": distance})
         )
 
         self.last_publish_virtual_location_time = time.time()
