@@ -58,11 +58,13 @@ class RouteMatcher:
         matched_point = None
         idx = 0
 
+        latlon = (lat, lon)
+
         for i in range(len(self.all_speedplan_points)-1):
             p1 = self.all_speedplan_points[i]
             p2 = self.all_speedplan_points[i+1]
 
-            if haversine(p1["lat"], p1["lon"], lat, lon) < 1e-2:
+            if haversine(p1["lat"], p1["lon"], lat, lon) < 1.0:
                 matched_point = p1
                 idx = i
                 break
@@ -72,6 +74,8 @@ class RouteMatcher:
                 max_angle = angle
                 matched_point = p1
                 idx = i
+
+        logger.debug(f"Got matched point at {idx} with angle {max_angle / math.pi * 180}.")
         
         self.current_pt_index = idx
 
@@ -151,10 +155,10 @@ class RouteMatcher:
 
         ratio = self.get_ratio(point, next_point, self.latlon)
 
-        spd = sug_spd1 * ratio + sug_spd2 * (1-ratio)
-        grade = grade1 * ratio + grade2 * (1-ratio)
+        spd = sug_spd1 * (1-ratio) + sug_spd2 * (ratio)
+        grade = grade1 * (1-ratio) + grade2 *   (ratio)
 
-        logger.debug(f"spd1 {sug_spd1} spd2 {sug_spd2} sug_spd {spd} ratio {ratio}")
+        logger.debug(f"spd1 {sug_spd1:.2f} spd2 {sug_spd2:.2f} sug_spd {spd:.2f} ratio {ratio:.3f}")
             
         return (spd, grade)
 
