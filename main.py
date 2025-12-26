@@ -78,10 +78,13 @@ class E2PilotAutopi:
         self.suggest_speed = -10
         # The tolerance for following suggested speed
         self.suggest_speed_tol = 5
-        self.lat = -1
-        self.lon = -1
         self.grade = 0.0
+        self.lat = -1; self.lon = -1
+        self.last_lat = None; self.last_lon = None
         self.last_trip_distance = 0.0
+        self.gps_total_distance_m = 0.0
+        self.min_move_threshold_m = 10.0  # Minimum movement to consider for distance tracking
+
 
         self.obd_listener.setup()
         self.display_manager.setup()
@@ -190,7 +193,7 @@ class E2PilotAutopi:
                 ("j1939/High_Resolution_Total_Vehicle_Distance", 0),
                 ("j1939/Total_Vehicle_Distance", 0),
                 ("obd2/distance_since_dtc_clear", 0),
-                ("h11gps/distance", 0),
+                ("gps/distance", 0),
                 ("sim/distance", 0)
             ]
         )
@@ -221,12 +224,12 @@ class E2PilotAutopi:
             if self.init_vehicle_distance == -1 and hasattr(self, 'vehicle_distance'):
                 self.init_vehicle_distance = self.vehicle_distance
 
-            if msg.topic == "h11gps/distance" and "total_distance_m" in data:
+            if msg.topic == "gps/distance" and "total_distance_m" in data:
                 self.trip_distance = data["total_distance_m"] / 1000.0
             elif not self.is_h11_alive() and hasattr(self, "vehicle_distance"):
                 self.trip_distance = self.vehicle_distance - self.init_vehicle_distance
-        logger.debug(f"Got trip distance: {self.trip_distance}")
 
+        logger.debug(f"Got trip distance: {self.trip_distance}")
 
         if self.last_trip_distance != 0.0:
             delta_d = self.trip_distance - self.last_trip_distance
@@ -250,28 +253,41 @@ class E2PilotAutopi:
     def on_location_message(self, client, userdata, msg):
         payload = msg.payload.decode()
         data = json.loads(payload)
-        if msg.topic == "h11gps/position":
-            if self.virtual_sim_mode:
-                return
-            self.last_h11_location_time = time.time()
-            self.lat = data["lat"]
-            self.lon = data["lon"]
-        elif msg.topic == "track/pos":
-            if self.virtual_sim_mode:
-                return
-            self.last_embed_gps_time = time.time()
-            if not self.is_h11_alive():
-                pos_data = data.get("loc", {})
-                self.lat = pos_data.get("lat", self.lat)
-                self.lon = pos_data.get("lon", self.lon)
-        elif msg.topic == "sim/position":
-            if self.virtual_sim_mode:
+        if self.virtual_sim_mode:
+            if msg.topic == "sim/position":
                 self.lat = data["lat"]
                 self.lon = data["lon"]
+            else:
+                return
+        else:
+            if msg.topic == "h11gps/position":
+                self.last_h11_location_time = time.time()
+                self.lat = data["lat"]
+                self.lon = data["lon"]
+            elif msg.topic == "track/pos":
+                self.last_embed_gps_time = time.time()
+                if not self.is_h11_alive():
+                    pos_data = data.get("loc", {})
+                    self.lat = pos_data.get("lat", self.lat)
+                    self.lon = pos_data.get("lon", self.lon)
 
+        if self.last_lat is None and self.last_lon is None:
+            dist = haversine(self.lat, self.lon, self.last_lat, self.last_lon)
+            if dist > self.min_move_threshold_m:
+                self.gps_total_distance_m += dist
+                self.last_lat = self.lat
+                self.last_lon = self.lon
+        else:
+            self.last_lat = self.lat
+            self.last_lon = self.lon
+        
+        self.mqtt_distance_client.publish(
+            "gps/distance",
+            json.dumps({"total_distance_m": self.gps_total_distance_m})
+        )
+            
         pt = self.route_matcher.update_pt(self.lat, self.lon)
 
-        # if pt != None:
         sug_spd, g = self.route_matcher.get_suggest_speed_and_grade()
         if sug_spd >= 0:
             sug_spd = sug_spd * 3.6
