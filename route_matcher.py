@@ -19,19 +19,28 @@ class RouteMatcher:
             self.data_dir = g_data_dir.joinpath(data_dir)
         self.route_data = None
         self.pt = None
+        self.current_pt_index = -1
+        self.latlon = (0.0, 0.0)
 
     def load_route_from_json(self, filename):
         filepath = self.data_dir.joinpath(filename)
         with open(filepath, "r") as f:
             self.route_data = json.load(f)
 
+        self.all_speedplan_points = []
+        for leg in self.route_data.get("legs", []):
+            for step in leg.get("steps", []):
+                for point in step.get("speedplan", []):
+                    if point:
+                        self.all_speedplan_points.append(point)
+
+
     def update_pt(self, lat, lon):
         """
         Update the current closest point based on the given latitude and longitude.
         """
         pt = self.find_closest_speedplan_point(lat, lon)
-        if pt:
-            self.pt = pt
+        self.latlon = (lat, lon)
         return self.pt
 
     def find_closest_speedplan_point(self, lat, lon):
@@ -41,21 +50,85 @@ class RouteMatcher:
         closest_point = None
         min_distance = float("inf")
 
-        kleg, kstep, kpoint = 0, 0, 0
-        for (ileg, leg) in enumerate(self.route_data.get("legs", [])):
-            for (istep, step) in enumerate(leg.get("steps", [])):
-                for (ipoint, point) in enumerate(step.get("speedplan", [])):
-                    p_lat = point.get("lat")
-                    p_lon = point.get("lon")
-                    if p_lat is not None and p_lon is not None:
-                        # Use Haversine distance instead of Euclidean
-                        distance = haversine(lat, lon, p_lat, p_lon)
-                        if distance < min_distance:
-                            min_distance = distance
-                            closest_point = point
-                            kleg, kstep, kpoint = ileg, istep, ipoint
-        logger.debug(f"Got closest pt {(kleg, kstep, kpoint)} with distance {min_distance:.1f} meters")
+        kpoint = -1
+        for (ipoint, point) in enumerate(self.all_speedplan_points):
+            p_lat = point.get("lat")
+            p_lon = point.get("lon")
+            if p_lat is not None and p_lon is not None:
+                # Use Haversine distance instead of Euclidean
+                distance = haversine(lat, lon, p_lat, p_lon)
+                if distance < min_distance:
+                    min_distance = distance
+                    closest_point = point
+                    kpoint = ipoint
+
+        if closest_point:
+            self.current_pt_index = kpoint
+            if kpoint != len(self.all_speedplan_points) - 1:
+                pt_next = self.all_speedplan_points[kpoint + 1]
+
+            
+        logger.debug(f"Got closest pt {kpoint} with distance {min_distance:.1f} meters")
         return closest_point
+
+    def get_next_speedplan_point(self):
+        if self.current_pt_index == -1:
+            return None
+        
+        if self.current_pt_index < len(self.all_speedplan_points) - 1:
+            return self.all_speedplan_points[self.current_pt_index + 1]
+        
+        return self.all_speedplan_points[self.current_pt_index]
+
+    def get_suggest_speed_and_grade(self):
+        if self.current_pt_index == -1:
+            return 0.0
+        if not self.route_data:
+            return 0.0
+
+        point = self.all_speedplan_points[self.current_pt_index]
+        next_point = self.get_next_speedplan_point()
+
+
+        sug_spd1 = point.get("veh_state", {}).get("speed", -1)
+        sug_spd2 = next_point.get("veh_state", {}).get("speed", -1)
+
+        grade1 = point.get("grade", 0.0)
+        grade2 = next_point.get("grade", 0.0)
+
+        ratio = self.get_ratio(point, next_point, self.latlon)
+
+        spd = sug_spd1 * ratio + sug_spd2 * (1-ratio)
+        grade = grade1 * ratio + grade2 * (1-ratio)
+            
+        return (spd, grade)
+
+    def get_ratio(self, point1, point2, latlon):
+        """
+        The two points in the speedplan might be far apart, and there might be some jumping point if the GPS frequency is high. 
+        """
+        lat1 = point1.get("lat")
+        lon1 = point1.get("lon")
+
+        lat2 = point2.get("lat")
+        lon2 = point2.get("lon")
+
+        if lat1 is None or lon1 is None or lat2 is None or lon2 is None:
+            return 0.0
+
+        dist_total = haversine(lat1, lon1, lat2, lon2)
+        dist_to_point1 = haversine(latlon[0], latlon[1], lat1, lon1)
+
+        if dist_total == 0:
+            return 0.0
+
+        ratio = dist_to_point1 / dist_total
+        ratio = max(0.0, min(1.0, ratio))
+        return ratio
+
+
+
+
 
 
 def _test_route_matcher():
