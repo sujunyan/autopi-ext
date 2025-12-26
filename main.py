@@ -25,6 +25,8 @@ logging.getLogger("j1939").setLevel(logging.DEBUG)
 logging.getLogger("can").setLevel(logging.DEBUG)
 
 USE_1939 = True
+# Use location simulation mode
+VIRTUAL_SIMULATION_MODE = True
 route_name = [
     "test.2025-07-04.opt.JuMP.route.json",
     "20251222_waichen_in.opt.JuMP.route.json",   # idx=1 from outside to back to waichen
@@ -41,6 +43,9 @@ class E2PilotAutopi:
             self.obd_listener = J1939Listener()
         else:
             self.obd_listener = Obd2Listener()
+
+        # If true, we will simulate by publishing virtual location messages on mqtt
+        self.virtual_sim_mode = VIRTUAL_SIMULATION_MODE
 
         self.mqtt_broker = "localhost"
         self.mqtt_port = 1883
@@ -237,6 +242,9 @@ class E2PilotAutopi:
                 pos_data = data.get("loc", {})
                 self.lat = pos_data.get("lat", self.lat)
                 self.lon = pos_data.get("lon", self.lon)
+        elif msg.topic == "sim/position":
+            self.lat = data["lat"]
+            self.lon = data["lon"]
 
         pt = self.route_matcher.update_pt(self.lat, self.lon)
 
@@ -272,6 +280,7 @@ class E2PilotAutopi:
         if abs(self.current_speed - self.suggest_speed) <= self.suggest_speed_tol:
             return True
         return False
+    
 
     def setup_mqtt_location_client(self):
         self.mqtt_location_client = mqtt.Client(CallbackAPIVersion.VERSION2)
