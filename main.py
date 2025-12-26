@@ -229,14 +229,14 @@ class E2PilotAutopi:
             elif not self.is_h11_alive() and hasattr(self, "vehicle_distance"):
                 self.trip_distance = self.vehicle_distance - self.init_vehicle_distance
 
-        logger.debug(f"Got trip distance: {self.trip_distance}")
+        logger.debug(f"Got trip distance: {self.trip_distance:.3f}")
 
         if self.last_trip_distance != 0.0:
             delta_d = self.trip_distance - self.last_trip_distance
             if delta_d > 0 and self.is_within_suggest_speed():
                 self.follow_range += delta_d
                 # self.display_manager.set_follow_range(self.follow_range)
-                logger.debug(f"Got follow range {self.follow_range}")
+                logger.debug(f"Got follow range {self.follow_range:.3f}")
 
             # Do not compute follow rate at the beginning
             if self.trip_distance > 0.1:
@@ -271,7 +271,7 @@ class E2PilotAutopi:
                     self.lat = pos_data.get("lat", self.lat)
                     self.lon = pos_data.get("lon", self.lon)
 
-        if self.last_lat is None and self.last_lon is None:
+        if self.last_lat is not None and self.last_lon is not None:
             dist = haversine(self.lat, self.lon, self.last_lat, self.last_lon)
             if dist > self.min_move_threshold_m:
                 self.gps_total_distance_m += dist
@@ -342,7 +342,7 @@ class E2PilotAutopi:
         next_lat = self.lat + (lat2 - lat1) * increment
         next_lon = self.lon + (lon2 - lon1) * increment
         delta_dis = haversine(self.lat, self.lon, next_lat, next_lon)
-        logger.debug(f"Update delta_dis: {delta_dis}, latlon: ({self.lat}, {self.lon}), next latlon {next_lat}, {next_lon}")
+        logger.debug(f"Update delta_dis: {delta_dis:.3f}, latlon: ({self.lat:.8f}, {self.lon:.8f}), next latlon {next_lat:.8f}, {next_lon:.8f}")
         self.lat = next_lat
         self.lon = next_lon
 

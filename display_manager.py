@@ -19,7 +19,7 @@ def find_nextion_serial_port(baud_rate=115200, timeout=2):
         str: The path to the correct serial port if found, otherwise None.
     """
     serial_ports = glob.glob('/dev/ttyUSB*')
-    logger.debug(f"Found potential serial devices: {serial_ports}")
+    logger.info(f"Found potential serial devices: {serial_ports}")
     # Nextion command and response end bytes
     NEXTION_END_BYTES = b'\xff\xff\xff'
     # Test command: query current display page. 'dp' followed by end bytes.

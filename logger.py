@@ -17,8 +17,8 @@ def config_logger(level=logging.INFO):
 
     os.makedirs(log_directory, exist_ok=True)
 
-    info_log_filepath = os.path.join(log_directory, f"e2pilot_autopi_info_{timestamp}.log")
-    debug_log_filepath = os.path.join(log_directory, f"e2pilot_autopi_debug_{timestamp}.log")
+    info_log_filepath = os.path.join(log_directory, f"e2pilot_info_{timestamp}.log")
+    debug_log_filepath = os.path.join(log_directory, f"e2pilot_debug_{timestamp}.log")
 
     formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 
@@ -43,7 +43,7 @@ def config_logger(level=logging.INFO):
     # Console handler
     console_handler = logging.StreamHandler()
     console_handler.setFormatter(formatter)
-    console_handler.setLevel(level)
+    console_handler.setLevel(logging.INFO)
 
     logger.addHandler(info_handler)
     logger.addHandler(debug_handler)

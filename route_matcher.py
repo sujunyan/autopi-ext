@@ -42,7 +42,6 @@ class RouteMatcher:
         # pt = self.find_closest_speedplan_point(lat, lon)
         self.pt = self.match_solution(lat, lon)
         self.latlon = (lat, lon)
-        # logger.debug(f"Got current GPS {lat}, {lon}")
         return self.pt
 
     def match_solution(self, lat, lon):
