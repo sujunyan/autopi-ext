@@ -27,6 +27,7 @@ logging.getLogger("can").setLevel(logging.DEBUG)
 USE_1939 = True
 # Use location simulation mode
 VIRTUAL_SIMULATION_MODE = True
+
 route_name = [
     "test.2025-07-04.opt.JuMP.route.json",
     "20251222_waichen_in.opt.JuMP.route.json",   # idx=1 from outside to back to waichen
@@ -46,6 +47,8 @@ class E2PilotAutopi:
 
         # If true, we will simulate by publishing virtual location messages on mqtt
         self.virtual_sim_mode = VIRTUAL_SIMULATION_MODE
+        if self.virtual_sim_mode:
+            logger.info("Using virtual simulation mode for location...")
 
         self.mqtt_broker = "localhost"
         self.mqtt_port = 1883
@@ -67,6 +70,7 @@ class E2PilotAutopi:
         self.last_h11_location_time = time.time()
         self.last_embed_gps_time = time.time()
         self.last_heart_beat_time = time.time()
+        self.last_publish_virtual_location_time = time.time()
 
         self.current_speed = -1
         self.suggest_speed = -10
@@ -83,9 +87,11 @@ class E2PilotAutopi:
         self.setup_mqtt_location_client()
         self.setup_mqtt_distance_client()
 
-        self.h11_listener.setup()
+        if not self.virtual_sim_mode:
+            self.h11_listener.setup()
+            self.embed_gps_listener.setup()
+
         self.embed_acc_listener.setup()
-        self.embed_gps_listener.setup()
        
 
         self.route_matcher.load_route_from_json(route_name)
@@ -102,6 +108,8 @@ class E2PilotAutopi:
             if (time.time() - self.last_heart_beat_time) > 10.0:
                 logger.info("Heartbeat msg...")
                 self.last_heart_beat_time = time.time()
+            if self.virtual_sim_mode:
+                self.publish_virtual_location()
             time.sleep(0.5)
 
     def close(self):
@@ -243,8 +251,9 @@ class E2PilotAutopi:
                 self.lat = pos_data.get("lat", self.lat)
                 self.lon = pos_data.get("lon", self.lon)
         elif msg.topic == "sim/position":
-            self.lat = data["lat"]
-            self.lon = data["lon"]
+            if self.virual_sim_mode:
+                self.lat = data["lat"]
+                self.lon = data["lon"]
 
         pt = self.route_matcher.update_pt(self.lat, self.lon)
 
@@ -280,7 +289,6 @@ class E2PilotAutopi:
         if abs(self.current_speed - self.suggest_speed) <= self.suggest_speed_tol:
             return True
         return False
-    
 
     def setup_mqtt_location_client(self):
         self.mqtt_location_client = mqtt.Client(CallbackAPIVersion.VERSION2)
@@ -290,20 +298,44 @@ class E2PilotAutopi:
             [
                 ("h11gps/position", 0),  # provided by h11_listener
                 ("track/pos", 0),  # provided by track_manager inside autopi
+                ("sim/position", 0) # virtual location for simulation
             ]
         )
         self.mqtt_location_client.loop_start()
 
     def publish_virtual_location(self):
+        if (time.time() - self.last_publish_virtual_location_time) < 1.0:
+            return
+
         idx = self.route_matcher.current_pt_index
         if idx == -1:
             idx = 0
             self.route_matcher.current_pt_index = 0
-        pt = self.route_matcher.all_speedplan_points[idx]
-        next_pt = self.route_matcher.get_next_speedplan_point()
-            lat = pt.get("lat", 0.0)
-            lon = pt.get("lon", 0.0)
-        pass
+
+        pt1 = self.route_matcher.all_speedplan_points[idx]
+        pt2 = self.route_matcher.get_next_speedplan_point()
+        lat1 = pt1.get("lat", 0.0)
+        lon1 = pt1.get("lon", 0.0)
+        lat2 = pt2.get("lat", 0.0)
+        lon2 = pt2.get("lon", 0.0)
+        if self.lat == -1 and self.lon == -1:
+            self.lat, self.lon = lat1, lon1
+
+        increment = 0.1
+        self.lat += (lat2 - lat1) * increment
+        self.lon += (lon2 - lon1) * increment
+
+        self.mqtt_location_client.publish(
+            "sim/position",
+            json.dumps(
+                {
+                    "lat": self.lat,
+                    "lon": self.lon,
+                }
+            ),
+        )
+
+        self.last_publish_virtual_location_time = time.time()
 
 
 def main():
