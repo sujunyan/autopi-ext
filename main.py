@@ -279,19 +279,6 @@ class E2PilotAutopi:
         self.grade = g * 100
         self.display_manager.set_grade(self.grade)
             
-            # sug_spd = pt.get("veh_state", {}).get("speed", -1)
-            # sug_spd = sug_spd * 3.6
-            # self.suggest_speed = sug_spd
-            # self.display_manager.set_suggest_speed(sug_spd)
-            # grade = pt.get("grade", None)
-            # if grade != None:
-            #     grade *= 100
-            #     self.grade = grade
-            #     self.display_manager.set_grade(self.grade)
-            # logger.debug(f"Got sug_spd: {self.suggest_speed}, grade: {self.grade} %")
-        # else:
-        #     logger.warning("Got an empty point in the speed plan...")
-
     def is_within_suggest_speed(self):
         if self.suggest_speed < 0:
             return False
