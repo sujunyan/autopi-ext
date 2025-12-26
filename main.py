@@ -350,12 +350,10 @@ class E2PilotAutopi:
 
         self.mqtt_location_client.publish(
             "sim/position",
-            json.dumps(
-                {
+            json.dumps({
                     "lat": self.lat,
                     "lon": self.lon,
-                }
-            ),
+                }),
         )
         self.mqtt_location_client.publish(
             "sim/distance",
