@@ -316,7 +316,7 @@ class E2PilotAutopi:
         self.mqtt_location_client.loop_start()
 
     def publish_virtual_location(self):
-        if (time.time() - self.last_publish_virtual_location_time) < 0.9:
+        if (time.time() - self.last_publish_virtual_location_time) < 0.2:
             return
 
         idx = self.route_matcher.current_pt_index
