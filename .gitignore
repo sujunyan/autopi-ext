@@ -8,3 +8,4 @@ logs/
 tmp.py
 *.csv
 .DS_Store
+*.png

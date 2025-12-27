@@ -3,6 +3,9 @@ import numpy as np
 from utils import haversine
 import sys
 import os
+import matplotlib
+matplotlib.use('Agg')
+import matplotlib.pyplot as plt
 
 def parse_h11(filepath):
     data = []
@@ -16,14 +19,16 @@ def parse_h11(filepath):
                 parts = line.split(',')
                 try:
                     # Based on observation:
-                    # $GNPOS,lat,lon,...,timestamp_ms(index 18)
+                    # $GNPOS,lat,lon,alt,...,timestamp_ms(index 18)
                     lat = float(parts[1])
                     lon = float(parts[2])
+                    alt = float(parts[3])
                     ts_ms = float(parts[18].split('*')[0]) # Handle checksum if present
                     data.append({
                         'timestamp': ts_ms / 1000.0,
                         'h11_lat': lat,
-                        'h11_lon': lon
+                        'h11_lon': lon,
+                        'h11_alt': alt
                     })
                 except (IndexError, ValueError):
                     continue
@@ -43,10 +48,12 @@ def parse_embedgps(filepath):
                 ts = float(parts[0])
                 lat = float(parts[1])
                 lon = float(parts[2])
+                alt = float(parts[3])
                 data.append({
                     'timestamp': ts,
                     'embed_lat': lat,
-                    'embed_lon': lon
+                    'embed_lon': lon,
+                    'embed_alt': alt
                 })
             except (IndexError, ValueError):
                 continue
@@ -80,23 +87,65 @@ def compare(h11_file, embed_file):
         axis=1
     )
     
+    # Calculate altitude difference
+    merged['alt_diff_m'] = merged['embed_alt'] - merged['h11_alt']
+    
     print(f"Comparison Summary:")
     print(f"Time range: {merged['timestamp'].min():.2f} to {merged['timestamp'].max():.2f} ({merged['timestamp'].max() - merged['timestamp'].min():.2f} seconds)")
     print(f"Total points compared: {len(merged)}")
-    print(f"Mean distance: {merged['distance_m'].mean():.2f} meters")
-    print(f"Median distance: {merged['distance_m'].median():.2f} meters")
-    print(f"Max distance: {merged['distance_m'].max():.2f} meters")
-    print(f"Min distance: {merged['distance_m'].min():.2f} meters")
-    print(f"Distance STD: {merged['distance_m'].std():.2f} meters")
+    print(f"Mean horizontal distance: {merged['distance_m'].mean():.2f} meters")
+    print(f"Median horizontal distance: {merged['distance_m'].median():.2f} meters")
+    print(f"Max horizontal distance: {merged['distance_m'].max():.2f} meters")
+    print(f"Horizontal Distance STD: {merged['distance_m'].std():.2f} meters")
+    print("-" * 30)
+    print(f"Mean altitude diff: {merged['alt_diff_m'].mean():.2f} meters")
+    print(f"Median altitude diff: {merged['alt_diff_m'].median():.2f} meters")
+    print(f"Max altitude diff: {merged['alt_diff_m'].max():.2f} meters")
+    print(f"Altitude diff STD: {merged['alt_diff_m'].std():.2f} meters")
     
     # Save results
     output_file = "comparison_results.csv"
     merged.to_csv(output_file, index=False)
     print(f"Detailed results saved to {output_file}")
 
+    # Plotting
+    try:
+        fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 12))
+        
+        # Trajectory plot
+        ax1.plot(merged['h11_lon'], merged['h11_lat'], label='H11 GPS', alpha=0.7)
+        ax1.plot(merged['embed_lon'], merged['embed_lat'], label='Embed GPS', alpha=0.7)
+        ax1.set_xlabel('Longitude')
+        ax1.set_ylabel('Latitude')
+        ax1.set_title('GPS Trajectory Comparison')
+        ax1.legend()
+        ax1.grid(True)
+        
+        # Altitude comparison plot
+        relative_time = merged['timestamp'] - merged['timestamp'].min()
+        ax2.plot(relative_time, merged['h11_alt'], label='H11 Altitude', alpha=0.7)
+        ax2.plot(relative_time, merged['embed_alt'], label='Embed Altitude', alpha=0.7)
+        ax2.set_xlabel('Time (s)')
+        ax2.set_ylabel('Altitude (m)')
+        ax2.set_title('Altitude Comparison over Time')
+        ax2.legend()
+        ax2.grid(True)
+        
+        plt.tight_layout()
+        plot_file = "comparison_plot.png"
+        plt.savefig(plot_file)
+        print(f"Plot saved to {plot_file}")
+    except Exception as e:
+        print(f"Error during plotting: {e}")
+
 if __name__ == "__main__":
-    h11_path = "data/h11/h11_raw_20251223_0637.txt"
-    embed_path = "data/embedgps/embedgps_raw_20251223_0637.txt"
+    matplotlib.rc("font", family="DejaVu Sans") 
+    h11_path, embed_path = [
+        ("data/h11/h11_raw_20251223_0745_youke_out_10hz.txt",
+     "data/embedgps/embedgps_raw_20251223_0745.txt"), #idx=0
+        ("data/h11/h11_raw_20251223_0752_youke_in_10hz.txt",
+     "data/embedgps/embedgps_raw_20251223_0752.txt"), #idx=1
+     ][0]
     
     if len(sys.argv) > 2:
         h11_path = sys.argv[1]
