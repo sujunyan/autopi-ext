@@ -3,6 +3,7 @@ import logging
 import math
 import os
 from pathlib import Path
+from typing import Optional, Dict, Any, Union
 
 from utils import haversine
 
@@ -34,7 +35,7 @@ route_name_subset = [
 
 
 class RouteMatcher:
-    def __init__(self, data_dir=""):
+    def __init__(self, data_dir: Union[str, Path] = ""):
         if isinstance(data_dir, Path):
             self.data_dir = data_dir
         else:
@@ -92,90 +93,95 @@ class RouteMatcher:
         self.latlon = (lat, lon)
         return self.pt
 
-    def match_solution(self, lat, lon):
+    def match_solution(self, lat, lon) -> Optional[Dict[str, Any]]:
         """
-        Match the given latitude and longitude to the closest point in the speedplan.
-        
-        Note that we need to make sure the layout is 
-
-        pt1 -> gps -> pt2
+        Match the given latitude and longitude to the closest segment in the speedplan.
+        Finds index i such that the GPS point is between point i and i+1.
         """
+        if not self.all_speedplan_points:
+            return None
 
-        max_angle = 0.0
-        matched_point = None
-        idx = 0
+        def find_best_in_range(index_range):
+            best_i = -1
+            min_d = float("inf")
+            cos_l = math.cos(math.radians(lat))
+            for i in index_range:
+                if i < 0 or i >= len(self.all_speedplan_points) - 1:
+                    continue
+                p1 = self.all_speedplan_points[i]
+                p2 = self.all_speedplan_points[i+1]
 
-        latlon = (lat, lon)
+                dx = (p2["lon"] - p1["lon"]) * cos_l
+                dy = p2["lat"] - p1["lat"]
+                mag_sq = dx * dx + dy * dy
 
-        for i in range(len(self.all_speedplan_points)-1):
-            p1 = self.all_speedplan_points[i]
-            p2 = self.all_speedplan_points[i+1]
+                if mag_sq > 0:
+                    gx = (lon - p1["lon"]) * cos_l
+                    gy = lat - p1["lat"]
+                    r = (gx * dx + gy * dy) / mag_sq
+                    r = max(0.0, min(1.0, r))
 
-            if haversine(p1["lat"], p1["lon"], lat, lon) < 1.0:
-                matched_point = p1
-                idx = i
-                break
+                    proj_lat = p1["lat"] + r * (p2["lat"] - p1["lat"])
+                    proj_lon = p1["lon"] + r * (p2["lon"] - p1["lon"])
+                    dist = haversine(lat, lon, proj_lat, proj_lon)
+                else:
+                    dist = haversine(lat, lon, p1["lat"], p1["lon"])
 
-            angle = self.calculate_angle(p1, p2, latlon)
-            if angle > max_angle:
-                max_angle = angle
-                matched_point = p1
-                idx = i
+                if dist < min_d:
+                    min_d = dist
+                    best_i = i
+            return best_i, min_d
 
-        logger.debug(f"Got matched point at {idx} with angle {max_angle / math.pi * 180}.")
-        if abs(idx - self.current_pt_index) > 1:
-            logger.warning(f"Got a jump of index in the route, need to check for potential bugs.cur={self.current_pt_index}, next={idx}")
-        
-        self.current_pt_index = idx
+        # 1. Search in local window if possible
+        if self.current_pt_index >= 0:
+            start = max(0, self.current_pt_index - 20)
+            end = min(len(self.all_speedplan_points) - 1, self.current_pt_index + 100)
+            best_idx, min_dist = find_best_in_range(range(start, end))
 
-        return matched_point
+            # 2. If not found or too far, search everywhere
+            if best_idx == -1 or min_dist > 50:
+                best_idx_full, min_dist_full = find_best_in_range(
+                    range(len(self.all_speedplan_points) - 1)
+                )
+                if best_idx_full != -1 and min_dist_full < min_dist:
+                    best_idx, min_dist = best_idx_full, min_dist_full
+        else:
+            best_idx, min_dist = find_best_in_range(
+                range(len(self.all_speedplan_points) - 1)
+            )
 
-    def calculate_angle(self, p1, p2, latlon):
-        """
-        Calculate the angle between the vector gps->p1 and gps->p2
+        if best_idx != -1:
+            if self.current_pt_index != -1 and abs(best_idx - self.current_pt_index) > 5:
+                logger.warning(
+                    f"Got a jump of index in the route: cur={self.current_pt_index}, next={best_idx}"
+                )
+            self.current_pt_index = best_idx
+            return self.all_speedplan_points[best_idx]
 
-        return angle in radians
-        """
-        v1 = (p1["lat"] - latlon[0], p1["lon"] - latlon[1])
-        v2 = (p2["lat"] - latlon[0], p2["lon"] - latlon[1])
+        return None
 
-        dot_product = v1[0]*v2[0] + v1[1]*v2[1]
-        mag_v1 = math.sqrt(v1[0]**2 + v1[1]**2)
-        mag_v2 = math.sqrt(v2[0]**2 + v2[1]**2)
+    def find_closest_speedplan_point(self, lat, lon):
 
-        if mag_v1 == 0 or mag_v2 == 0:
-            return 180.0
+        closest_point = None
+        min_distance = float("inf")
 
-        cos_angle = dot_product / (mag_v1 * mag_v2)
-        cos_angle = max(-1.0, min(1.0, cos_angle))
+        kpoint = -1
+        for ipoint, point in enumerate(self.all_speedplan_points):
+            p_lat = point.get("lat")
+            p_lon = point.get("lon")
+            if p_lat is not None and p_lon is not None:
+                # Use Haversine distance instead of Euclidean
+                distance = haversine(lat, lon, p_lat, p_lon)
+                if distance < min_distance:
+                    min_distance = distance
+                    closest_point = point
+                    kpoint = ipoint
 
-        angle = math.acos(cos_angle)
-        return angle
+        if closest_point:
+            self.current_pt_index = kpoint
 
-
-    # def find_closest_speedplan_point(self, lat, lon):
-
-    #     closest_point = None
-    #     min_distance = float("inf")
-
-    #     kpoint = -1
-    #     for (ipoint, point) in enumerate(self.all_speedplan_points):
-    #         p_lat = point.get("lat")
-    #         p_lon = point.get("lon")
-    #         if p_lat is not None and p_lon is not None:
-    #             # Use Haversine distance instead of Euclidean
-    #             distance = haversine(lat, lon, p_lat, p_lon)
-    #             if distance < min_distance:
-    #                 min_distance = distance
-    #                 closest_point = point
-    #                 kpoint = ipoint
-
-    #     if closest_point:
-    #         self.current_pt_index = kpoint
-
-    #         
-    #     logger.debug(f"Got closest pt {kpoint} with distance {min_distance:.1f} meters")
-    #     return closest_point
+        logger.debug(f"Got closest pt {kpoint} with distance {min_distance:.1f} meters")
+        return closest_point
 
     def get_next_speedplan_point(self):
         if self.current_pt_index == -1:
@@ -194,7 +200,8 @@ class RouteMatcher:
 
         point = self.all_speedplan_points[self.current_pt_index]
         next_point = self.get_next_speedplan_point()
-
+        if next_point is None:
+            next_point = point
 
         sug_spd1 = point.get("veh_state", {}).get("speed", -1)
         sug_spd2 = next_point.get("veh_state", {}).get("speed", -1)
@@ -213,26 +220,27 @@ class RouteMatcher:
 
     def get_ratio(self, point1, point2, latlon):
         """
-        The two points in the speedplan might be far apart, and there might be some jumping point if the GPS frequency is high. 
+        Calculate the projection ratio of latlon onto the segment point1->point2.
         """
-        lat1 = point1.get("lat")
-        lon1 = point1.get("lon")
+        lat1, lon1 = point1.get("lat"), point1.get("lon")
+        lat2, lon2 = point2.get("lat"), point2.get("lon")
+        lat, lon = latlon
 
-        lat2 = point2.get("lat")
-        lon2 = point2.get("lon")
-
-        if lat1 is None or lon1 is None or lat2 is None or lon2 is None:
+        if None in (lat1, lon1, lat2, lon2):
             return 0.0
 
-        dist_total = haversine(lat1, lon1, lat2, lon2)
-        dist_to_point1 = haversine(latlon[0], latlon[1], lat1, lon1)
+        cos_lat = math.cos(math.radians(lat1))
+        dx = (lon2 - lon1) * cos_lat
+        dy = lat2 - lat1
+        mag_sq = dx * dx + dy * dy
 
-        if dist_total == 0:
+        if mag_sq == 0:
             return 0.0
 
-        ratio = dist_to_point1 / dist_total
-        ratio = max(0.0, min(1.0, ratio))
-        return ratio
+        gx = (lon - lon1) * cos_lat
+        gy = lat - lat1
+        r = (gx * dx + gy * dy) / mag_sq
+        return max(0.0, min(1.0, r))
 
 
 def _test_route_matcher():
