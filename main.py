@@ -28,16 +28,6 @@ USE_1939 = True
 # Use location simulation mode
 VIRTUAL_SIMULATION_MODE = True
 
-route_name = [
-    "test.2025-07-04.opt.JuMP.route.json",
-    "20251222_waichen_in.opt.JuMP.route.json",   # idx=1 from outside to back to waichen
-    "20251222_waichen_out.opt.JuMP.route.json", # from waichen to go outside
-    "20251223_youke_out.opt.JuMP.route.json", # idx = 3
-    "20251223_youke_in.opt.JuMP.route.json", # idx = 4
-    "20251223_youke_in_10hz.route.json", # idx = 5
-    "20251223_youke_ont_10hz.route.json", # idx = 6
-][5]
-
 
 class E2PilotAutopi:
     def __init__(self):
@@ -79,7 +69,7 @@ class E2PilotAutopi:
         # The tolerance for following suggested speed
         self.suggest_speed_tol = 5
         self.grade = 0.0
-        self.lat = -1; self.lon = -1
+        self.lat = None; self.lon = None
         self.last_lat = None; self.last_lon = None
         self.last_trip_distance = 0.0
         self.gps_total_distance_m = 0.0
@@ -98,8 +88,7 @@ class E2PilotAutopi:
 
         self.embed_acc_listener.setup()
        
-
-        self.route_matcher.load_route_from_json(route_name)
+        # self.route_matcher.load_route_from_json(route_name)
 
     def loop_start(self):
         self.obd_listener.loop_start()
@@ -112,6 +101,7 @@ class E2PilotAutopi:
         while True:
             if (time.time() - self.last_heart_beat_time) > 10.0:
                 logger.info("Heartbeat msg...")
+                logger.info(f"Current state: speed: {self.current_speed:.2f}, suggest speed: {self.suggest_speed:.2f}, grade: {self.grade:.2f}, trip distance: {self.trip_distance:.3f}, follow range: {self.follow_range:.3f}, follow rate: {self.follow_rate:.3f}")
                 self.last_heart_beat_time = time.time()
             if self.virtual_sim_mode:
                 self.publish_virtual_location()
@@ -280,6 +270,9 @@ class E2PilotAutopi:
         else:
             self.last_lat = self.lat
             self.last_lon = self.lon
+
+        if not self.route_matcher.route_selected and self.lat is not None and self.lon is not None:
+            self.route_matcher.select_closest_route(self.lat, self.lon)
         
         self.mqtt_distance_client.publish(
             "gps/distance",
@@ -335,7 +328,7 @@ class E2PilotAutopi:
         lon1 = pt1.get("lon", 0.0)
         lat2 = pt2.get("lat", 0.0)
         lon2 = pt2.get("lon", 0.0)
-        if self.lat == -1 and self.lon == -1:
+        if self.lat != None and self.lon != None:
             self.lat, self.lon = lat1, lon1
 
         increment = 0.20

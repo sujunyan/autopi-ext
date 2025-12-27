@@ -11,6 +11,24 @@ logger = logging.getLogger("e2pilot_autopi")
 current_dir = Path(__file__).resolve().parent
 g_data_dir = current_dir.joinpath("data/opt_route")
 
+all_route_name_vec = [
+    "test.2025-07-04.opt.JuMP.route.json",
+    "20251222_waichen_in.opt.JuMP.route.json",   # idx=1 from outside to back to waichen
+    "20251222_waichen_out.opt.JuMP.route.json", # from waichen to go outside
+    "20251223_youke_out.opt.JuMP.route.json", # idx = 3
+    "20251223_youke_in.opt.JuMP.route.json", # idx = 4
+    "20251223_youke_in_10hz.route.json", # idx = 5
+    "20251223_youke_ont_10hz.route.json", # idx = 6
+]
+
+route_name_subset = [
+    "20251222_waichen_in.opt.JuMP.route.json",   # idx=0 from outside to back to waichen
+    "20251222_waichen_out.opt.JuMP.route.json", # idx=1 from waichen to go outside
+    "20251223_youke_in_10hz.route.json", # idx = 2, from youke in to outside
+    "20251223_youke_ont_10hz.route.json", # idx = 3
+]
+
+
 class RouteMatcher:
     def __init__(self, data_dir=""):
         if isinstance(data_dir, Path):
@@ -21,18 +39,44 @@ class RouteMatcher:
         self.pt = None
         self.current_pt_index = -1
         self.latlon = (0.0, 0.0)
+        self.route_name = ""
+
+    @property
+    def route_selected(self):
+        return self.route_data is not None
+
+    def select_closest_route(self, lat, lon):
+        min_dis = float("inf")
+        for route_name in route_name_subset:
+            (route_data, all_speedplan_points) = self.get_route_from_json(route_name)
+            pt0 = all_speedplan_points[0]
+            lat0, lon0 = pt0.get("lat"), pt0.get("lon")
+            distance = haversine(lat, lon, lat0, lon0)
+            if distance < min_dis:
+                min_dis = distance
+                self.route_name = route_name
+
+        self.load_route_from_json(self.route_name)
+        logger.info(f"Selected {self.route_name} with min distance {min_dis:.1f} meters.")
 
     def load_route_from_json(self, filename):
+        (route_data, all_speedplan_points) = self.get_route_from_json(filename)
+        self.route_data = route_data
+        self.all_speedplan_points = all_speedplan_points
+        
+    def get_route_from_json(self, filename):
         filepath = self.data_dir.joinpath(filename)
         with open(filepath, "r") as f:
-            self.route_data = json.load(f)
+            route_data = json.load(f)
 
-        self.all_speedplan_points = []
+        all_speedplan_points = []
         for leg in self.route_data.get("legs", []):
             for step in leg.get("steps", []):
                 for point in step.get("speedplan", []):
                     if point:
-                        self.all_speedplan_points.append(point)
+                        all_speedplan_points.append(point)
+
+        return (route_data, all_speedplan_points)
 
 
     def update_pt(self, lat, lon):
