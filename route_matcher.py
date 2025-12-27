@@ -19,13 +19,17 @@ all_route_name_vec = [
     "20251223_youke_in.opt.JuMP.route.json", # idx = 4
     "20251223_youke_in_10hz.route.json", # idx = 5
     "20251223_youke_ont_10hz.route.json", # idx = 6
+    "20251227_waichen_in_10hz.route.json", # idx = 7
+    "20251227_waichen_out_10hz.route.json", # idx = 8
 ]
 
 route_name_subset = [
-    "20251222_waichen_in.opt.JuMP.route.json",   # idx=0 from outside to back to waichen
-    "20251222_waichen_out.opt.JuMP.route.json", # idx=1 from waichen to go outside
+    # "20251222_waichen_in.opt.JuMP.route.json",   # idx=0 from outside to back to waichen
+    # "20251222_waichen_out.opt.JuMP.route.json", # idx=1 from waichen to go outside
     "20251223_youke_in_10hz.route.json", # idx = 2, from youke in to outside
-    # "20251223_youke_out_10hz.route.json", # idx = 3
+    # "20251223_youke_out_10hz.route.json", # 
+    "20251227_waichen_out_10hz.route.json", # from waichen to go outside
+    "20251227_waichen_in_10hz.route.json", # 
 ]
 
 
@@ -119,6 +123,8 @@ class RouteMatcher:
                 idx = i
 
         logger.debug(f"Got matched point at {idx} with angle {max_angle / math.pi * 180}.")
+        if abs(idx - self.current_pt_index) > 1:
+            logger.warning(f"Got a jump of index in the route, need to check for potential bugs.cur={self.current_pt_index}, next={idx}")
         
         self.current_pt_index = idx
 
