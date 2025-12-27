@@ -43,7 +43,7 @@ def config_logger(level=logging.INFO):
     # Console handler
     console_handler = logging.StreamHandler()
     console_handler.setFormatter(formatter)
-    console_handler.setLevel(logging.INFO)
+    console_handler.setLevel(level)
 
     logger.addHandler(info_handler)
     logger.addHandler(debug_handler)

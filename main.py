@@ -25,9 +25,9 @@ import route_matcher
 logging.getLogger("j1939").setLevel(logging.DEBUG)
 logging.getLogger("can").setLevel(logging.DEBUG)
 
-USE_1939 = False
+USE_1939 = True
 # Use location simulation mode
-VIRTUAL_SIMULATION_MODE = False
+VIRTUAL_SIMULATION_MODE = True
 
 
 
@@ -93,7 +93,7 @@ class E2PilotAutopi:
         self.embed_acc_listener.setup()
        
         if self.virtual_sim_mode:
-            route_name = route_matcher.route_name_subset[3]
+            route_name = route_matcher.route_name_subset[-1]
             self.route_matcher.load_route_from_json(route_name)
 
     def loop_start(self):
@@ -339,7 +339,7 @@ class E2PilotAutopi:
         if self.lat == None or self.lon == None:
             self.lat, self.lon = lat1, lon1
 
-        increment = 0.20
+        increment = 0.60
         next_lat = self.lat + (lat2 - lat1) * increment
         next_lon = self.lon + (lon2 - lon1) * increment
         delta_dis = haversine(self.lat, self.lon, next_lat, next_lon)
@@ -365,7 +365,7 @@ class E2PilotAutopi:
 
 
 def main():
-    config_logger(logging.DEBUG)
+    config_logger(logging.INFO)
 
     logger.info("-----------------------------------------------")
     logger.info("-----------------------------------------------")
