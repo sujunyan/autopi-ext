@@ -25,7 +25,7 @@ import route_matcher
 logging.getLogger("j1939").setLevel(logging.DEBUG)
 logging.getLogger("can").setLevel(logging.DEBUG)
 
-USE_1939 = True
+USE_1939 = False
 # Use location simulation mode
 VIRTUAL_SIMULATION_MODE = False
 
@@ -53,7 +53,8 @@ class E2PilotAutopi:
         self.embed_gps_listener = EmbedGpsListener(mqtt_broker=self.mqtt_broker)
         self.route_matcher = RouteMatcher()
         self.trip_distance = 0.0
-        self.init_vehicle_distance = -1
+        self.veh_trip_distance = 0.0
+        self.init_vehicle_distance = None
         self.follow_range = 0.0
         self.follow_rate = 0.0
 
@@ -76,6 +77,7 @@ class E2PilotAutopi:
         self.last_trip_distance = 0.0
         self.gps_total_distance_m = 0.0
         self.min_move_threshold_m = 10.0  # Minimum movement to consider for distance tracking
+        self.max_move_threshold_m = 1000_000.0  # Maximum movement to consider for distance tracking, I guess there is no tunnel with 1000km long...
 
 
         self.obd_listener.setup()
@@ -215,13 +217,14 @@ class E2PilotAutopi:
             elif msg.topic == "obd/distance_since_dtc_clear":
                 self.vehicle_distance = data["value"]
 
-            if self.init_vehicle_distance == -1 and hasattr(self, 'vehicle_distance'):
+            if self.init_vehicle_distance == None and hasattr(self, 'vehicle_distance'):
                 self.init_vehicle_distance = self.vehicle_distance
+                logger.info(f"Setting init vehicle distance {self.init_vehicle_distance}...")
 
             if msg.topic == "gps/distance" and "total_distance_m" in data:
                 self.trip_distance = data["total_distance_m"] / 1000.0
             elif not self.is_h11_alive() and hasattr(self, "vehicle_distance"):
-                self.trip_distance = self.vehicle_distance - self.init_vehicle_distance
+                self.veh_trip_distance = self.vehicle_distance - self.init_vehicle_distance
 
         logger.debug(f"Got trip distance: {self.trip_distance:.3f}")
 
@@ -267,10 +270,11 @@ class E2PilotAutopi:
 
         if self.last_lat is not None and self.last_lon is not None:
             dist = haversine(self.lat, self.lon, self.last_lat, self.last_lon)
-            if dist > self.min_move_threshold_m:
+            if dist > self.min_move_threshold_m and dist < self.max_move_threshold_m:
                 self.gps_total_distance_m += dist
                 self.last_lat = self.lat
                 self.last_lon = self.lon
+            logger.debug(f"Update delta_dis: {dist:.3f}, latlon: ({self.lat:.8f}, {self.lon:.8f})")
         else:
             self.last_lat = self.lat
             self.last_lon = self.lon

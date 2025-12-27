@@ -25,7 +25,7 @@ route_name_subset = [
     "20251222_waichen_in.opt.JuMP.route.json",   # idx=0 from outside to back to waichen
     "20251222_waichen_out.opt.JuMP.route.json", # idx=1 from waichen to go outside
     "20251223_youke_in_10hz.route.json", # idx = 2, from youke in to outside
-    "20251223_youke_out_10hz.route.json", # idx = 3
+    # "20251223_youke_out_10hz.route.json", # idx = 3
 ]
 
 
