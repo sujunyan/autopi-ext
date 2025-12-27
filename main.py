@@ -19,6 +19,7 @@ from j1939Listener import J1939Listener
 from obd2_listener import Obd2Listener
 from route_matcher import RouteMatcher
 from utils import haversine
+import route_matcher
 
 # Configure logging for j1939 and can libraries
 logging.getLogger("j1939").setLevel(logging.DEBUG)
@@ -26,7 +27,8 @@ logging.getLogger("can").setLevel(logging.DEBUG)
 
 USE_1939 = True
 # Use location simulation mode
-VIRTUAL_SIMULATION_MODE = True
+VIRTUAL_SIMULATION_MODE = False
+
 
 
 class E2PilotAutopi:
@@ -88,7 +90,9 @@ class E2PilotAutopi:
 
         self.embed_acc_listener.setup()
        
-        # self.route_matcher.load_route_from_json(route_name)
+        if self.virtual_sim_mode:
+            route_name = route_matcher.route_name_subset[3]
+            self.route_matcher.load_route_from_json(route_name)
 
     def loop_start(self):
         self.obd_listener.loop_start()
@@ -101,7 +105,7 @@ class E2PilotAutopi:
         while True:
             if (time.time() - self.last_heart_beat_time) > 10.0:
                 logger.info("Heartbeat msg...")
-                logger.info(f"Current state: speed: {self.current_speed:.2f}, suggest speed: {self.suggest_speed:.2f}, grade: {self.grade:.2f}, trip distance: {self.trip_distance:.3f}, follow range: {self.follow_range:.3f}, follow rate: {self.follow_rate:.3f}")
+                logger.info(f"Current state: speed: {self.current_speed:.2f}km/h, suggest speed: {self.suggest_speed:.2f}km/h, grade: {self.grade:.2f}%, trip distance: {self.trip_distance:.3f}km, follow range: {self.follow_range:.3f}km, follow rate: {self.follow_rate*100:.2f}%")
                 self.last_heart_beat_time = time.time()
             if self.virtual_sim_mode:
                 self.publish_virtual_location()
@@ -328,7 +332,7 @@ class E2PilotAutopi:
         lon1 = pt1.get("lon", 0.0)
         lat2 = pt2.get("lat", 0.0)
         lon2 = pt2.get("lon", 0.0)
-        if self.lat != None and self.lon != None:
+        if self.lat == None or self.lon == None:
             self.lat, self.lon = lat1, lon1
 
         increment = 0.20

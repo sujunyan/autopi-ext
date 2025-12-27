@@ -25,7 +25,7 @@ route_name_subset = [
     "20251222_waichen_in.opt.JuMP.route.json",   # idx=0 from outside to back to waichen
     "20251222_waichen_out.opt.JuMP.route.json", # idx=1 from waichen to go outside
     "20251223_youke_in_10hz.route.json", # idx = 2, from youke in to outside
-    "20251223_youke_ont_10hz.route.json", # idx = 3
+    "20251223_youke_out_10hz.route.json", # idx = 3
 ]
 
 
@@ -70,7 +70,7 @@ class RouteMatcher:
             route_data = json.load(f)
 
         all_speedplan_points = []
-        for leg in self.route_data.get("legs", []):
+        for leg in route_data.get("legs", []):
             for step in leg.get("steps", []):
                 for point in step.get("speedplan", []):
                     if point:
