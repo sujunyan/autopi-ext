@@ -105,25 +105,44 @@ class RouteMatcher:
             best_i = -1
             min_d = float("inf")
             cos_l = math.cos(math.radians(lat))
+            # Factor to adjust longitude degrees into equivalent latitude degrees
+            # based on how far we are from the equator.
             for i in index_range:
                 if i < 0 or i >= len(self.all_speedplan_points) - 1:
                     continue
                 p1 = self.all_speedplan_points[i]
                 p2 = self.all_speedplan_points[i+1]
 
+                # Calculate vector components of the road segment (p1 -> p2)
                 dx = (p2["lon"] - p1["lon"]) * cos_l
                 dy = p2["lat"] - p1["lat"]
                 mag_sq = dx * dx + dy * dy
 
+                # If mag_sq > 0, the two points are distinct and form a line.
+                # If mag_sq == 0, p1 and p2 are the same point (avoid division by zero).
                 if mag_sq > 0:
                     gx = (lon - p1["lon"]) * cos_l
                     gy = lat - p1["lat"]
+                    # r is the projection ratio along the line p1->p2
                     r = (gx * dx + gy * dy) / mag_sq
-                    r = max(0.0, min(1.0, r))
 
-                    proj_lat = p1["lat"] + r * (p2["lat"] - p1["lat"])
-                    proj_lon = p1["lon"] + r * (p2["lon"] - p1["lon"])
-                    dist = haversine(lat, lon, proj_lat, proj_lon)
+                    # To satisfy the requirement p1 -> gps -> p2, we prefer segments
+                    # where the GPS point projects BETWEEN the two points (0 <= r <= 1).
+                    if 0 <= r <= 1:
+                        # GPS is naturally between p1 and p2. 
+                        # Use the perpendicular distance (cross-track error).
+                        proj_lat = p1["lat"] + r * (p2["lat"] - p1["lat"])
+                        proj_lon = p1["lon"] + r * (p2["lon"] - p1["lon"])
+                        dist = haversine(lat, lon, proj_lat, proj_lon)
+                    else:
+                        # GPS is "outside" (either gps -> p1 -> p2 or p1 -> p2 -> gps).
+                        # We use the distance to the nearest endpoint but add a 10m penalty.
+                        # This encourages the search to pick a different segment where
+                        # the point is actually "inside" if one exists.
+                        r_clamped = max(0.0, min(1.0, r))
+                        proj_lat = p1["lat"] + r_clamped * (p2["lat"] - p1["lat"])
+                        proj_lon = p1["lon"] + r_clamped * (p2["lon"] - p1["lon"])
+                        dist = haversine(lat, lon, proj_lat, proj_lon) + 10.0
                 else:
                     dist = haversine(lat, lon, p1["lat"], p1["lon"])
 
