@@ -107,7 +107,7 @@ class E2PilotAutopi:
         while True:
             if (time.time() - self.last_heart_beat_time) > 10.0:
                 logger.info("Heartbeat msg...")
-                logger.info(f"Current state: speed: {self.current_speed:.2f}km/h, suggest speed: {self.suggest_speed:.2f}km/h, grade: {self.grade:.2f}%, trip distance: {self.trip_distance:.3f}km, follow range: {self.follow_range:.3f}km, follow rate: {self.follow_rate*100:.2f}%")
+                logger.info(f"Current state: speed: {self.current_speed:.2f}km/h, suggest speed: {self.suggest_speed:.2f}km/h, grade: {self.grade:.2f}%, trip distance: {self.trip_distance:.3f}km, follow range: {self.follow_range:.3f}km, follow rate: {self.follow_rate*100:.2f}%, ipt: {self.route_matcher.current_pt_index}")
                 self.last_heart_beat_time = time.time()
             if self.virtual_sim_mode:
                 self.publish_virtual_location()
@@ -339,7 +339,7 @@ class E2PilotAutopi:
         if self.lat == None or self.lon == None:
             self.lat, self.lon = lat1, lon1
 
-        increment = 0.10
+        increment = 0.20
         next_lat = self.lat + (lat2 - lat1) * increment
         next_lon = self.lon + (lon2 - lon1) * increment
         delta_dis = haversine(self.lat, self.lon, next_lat, next_lon)
