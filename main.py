@@ -339,7 +339,7 @@ class E2PilotAutopi:
         if self.lat == None or self.lon == None:
             self.lat, self.lon = lat1, lon1
 
-        increment = 0.60
+        increment = 0.10
         next_lat = self.lat + (lat2 - lat1) * increment
         next_lon = self.lon + (lon2 - lon1) * increment
         delta_dis = haversine(self.lat, self.lon, next_lat, next_lon)

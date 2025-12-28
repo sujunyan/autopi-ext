@@ -152,8 +152,14 @@ class RouteMatcher:
 
         if best_idx != -1:
             if self.current_pt_index != -1 and abs(best_idx - self.current_pt_index) > 5:
+                plan = self.all_speedplan_points
+                lat1 = plan[self.current_pt_index]["lat"]
+                lon1 = plan[self.current_pt_index]["lon"]
+                lat2 = plan[best_idx]["lat"]
+                lon2 = plan[best_idx]["lon"]
+                dist = haversine(lat1, lon1, lat2, lon2)
                 logger.warning(
-                    f"Got a jump of index in the route: cur={self.current_pt_index}, next={best_idx}"
+                    f"Got a jump of index in the route: cur={self.current_pt_index}, next={best_idx}, jump distance: {dist:.3f}m"
                 )
             self.current_pt_index = best_idx
             return self.all_speedplan_points[best_idx]
