@@ -1,242 +1,302 @@
 import os
-import pandas as pd
-import matplotlib.pyplot as plt
 import math
 import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
 from scipy.optimize import curve_fit
+import matplotlib
+
+# --- Constants for Vehicle Physics ---
+RHO = 1.225  # Air density (kg/m3)
+CAIR = 0.538  # Aerodynamic drag area (m2)
+A = 9.7  # Frontal area (m2)
+M = 49000.0  # Vehicle mass (kg)
+G = 9.81  # Gravitational acceleration (m/s2)
+MU = 0.004  # Rolling resistance coefficient
+T_MAX = 2500.0  # Maximum engine torque (Nm)
+
+# Derived physical coefficients
+C_AERO = A * CAIR * RHO / 2.0
+C_ROLL = M * G * MU
+C_GRAV = M * G
+C_INERTIAL = M
+
 
 def nonlinear_model(X, p1, p2, p3, p4, p5):
     """
-    Nonlinear model: P = max(0, p1*c1*v^3 + p2*c2*cos(theta)*v + p3*c3*sin(theta)*v + p4*c4*a*v + p5)
+    Nonlinear model for power prediction.
+    P = max(0, p1*c1*v^3 + p2*c2*cos(theta)*v + p3*c3*sin(theta)*v + p4*c4*a*v + p5)
     """
-    linear_part = X[:, 0]*p1 + X[:, 1]*p2 + X[:, 2]*p3 + X[:, 3]*p4 # + X[:, 4]*p5
+    linear_part = X[:, 0] * p1 + X[:, 1] * p2 + X[:, 2] * p3 + X[:, 3] * p4 + X[:, 4] * p5
     return np.maximum(0, linear_part)
 
+
+def calculate_physics_components(df):
+    """
+    Calculate engine power and individual force components from raw data.
+    """
+    # Base physical variables
+    v = df["front_axle_spd-kph"] / 3.6  # velocity in m/s
+    a = df["longitudinal_acc-m/s2"]  # acceleration in m/s2
+    theta = df["pitch-rad"]  # pitch in rad
+    trq_pct = df["act_eng_percent_trq-0~100"]
+    eng_spd_rpm = df["eng_spd"]
+
+    # Calculate individual forces (N)
+    df["force_aero"] = C_AERO * (v**2)
+    df["force_roll"] = C_ROLL * np.cos(theta)
+    df["force_grav"] = C_GRAV * np.sin(theta)
+    df["force_inertial"] = C_INERTIAL * a
+
+    # Calculate engine power (W)
+    torque = (trq_pct / 100.0) * T_MAX
+    omega = eng_spd_rpm * math.pi / 30.0  # angular velocity in rad/s
+    df["power_engine"] = torque * omega
+
+    return df
+
+
+def prepare_model_data(df):
+    """
+    Clean data and prepare features/target for model fitting.
+    """
+    required_cols = [
+        "front_axle_spd-kph",
+        "longitudinal_acc-m/s2",
+        "pitch-rad",
+        "act_eng_percent_trq-0~100",
+        "eng_spd",
+    ]
+
+    # Drop rows with NaNs in required columns
+    df_clean = df.dropna(subset=required_cols).copy()
+    if df_clean.empty:
+        return np.empty((0, 5)), np.array([])
+
+    v = df_clean["front_axle_spd-kph"] / 3.6
+    a = df_clean["longitudinal_acc-m/s2"]
+    theta = df_clean["pitch-rad"]
+
+    # Feature matrix X: [P_aero_base, P_roll_base, P_grav_base, P_accel_base, Offset]
+    X = np.column_stack(
+        [
+            C_AERO * (v**3),
+            C_ROLL * np.cos(theta) * v,
+            C_GRAV * np.sin(theta) * v,
+            C_INERTIAL * a * v,
+            np.ones(len(v)),
+        ]
+    )
+
+    # Target y: Actual Engine Power
+    torque = (df_clean["act_eng_percent_trq-0~100"] / 100.0) * T_MAX
+    omega = df_clean["eng_spd"] * math.pi / 30.0
+    y = torque * omega
+
+    return X, y
+
+
 def analyze_one_csv(file_path, csv_file, data_dir):
-    print(f"Reading {file_path}...")
+    """
+    Process a single CSV file, calculate physics, and generate subplots.
+    """
+    print(f"Reading and analyzing {csv_file}...")
     try:
         df = pd.read_csv(file_path)
-        
-        if 'timestamp-ns' in df.columns:
-            # For rows with the same timestamp, use uniform interpolation to make them different
-            # Example: 5 rows with same timestamp -> +0.0, +0.2, +0.4, +0.6, +0.8
-            counts = df.groupby('timestamp-ns')['timestamp-ns'].transform('count')
-            cumcounts = df.groupby('timestamp-ns').cumcount()
-            df['timestamp-ns'] = df['timestamp-ns'] + cumcounts / counts
-            
-            # Slice the data using time (seconds since start)
-            # Adjust start_time and end_time to zoom into different time windows
-            # start_time, end_time = 105 * 60,  135 * 60    # seconds
-            start_time, end_time = 105 * 60,  135 * 60    # seconds
-            start_time, end_time = 50 * 60,  75 * 60    # seconds
-            # start_time, end_time = 0, 300 * 60    # seconds
-            
-            time_min = df['timestamp-ns'].min()
-            relative_time = df['timestamp-ns'] - df['timestamp-ns'].min()
-            mask = (relative_time >= start_time) & (relative_time <= end_time)
-            # df = df[mask].reset_index(drop=True)
-            df = df[mask]
-            
+
+        if "timestamp-ns" in df.columns:
+            # Handle duplicate timestamps with uniform interpolation
+            counts = df.groupby("timestamp-ns")["timestamp-ns"].transform("count")
+            cumcounts = df.groupby("timestamp-ns").cumcount()
+            df["timestamp-ns"] = df["timestamp-ns"] + cumcounts / counts
+
+            # Zoom into a specific time window (seconds since start)
+            time_min_ns = df["timestamp-ns"].min()
+            relative_time_sec = df["timestamp-ns"] - time_min_ns
+
+            # Adjustable time window
+            # start_time, end_time = 50 * 60, 75 * 60
+            start_time, end_time = 50 * 60, 55 * 60
+            mask = (relative_time_sec >= start_time) & (relative_time_sec <= end_time)
+            df = df[mask].copy()
+
             if df.empty:
-                print(f"Warning: No data in the time range {start_time}-{end_time}s for {csv_file}")
+                print(f"Warning: No data in specified time range for {csv_file}")
                 return
 
-            x_axis = (df['timestamp-ns'] - time_min) / 60.0
-            x_label = 'Time (minutes)'
+            x_axis = (df["timestamp-ns"] - time_min_ns) / 60.0
+            x_label = "Time (minutes)"
         else:
-            # Fallback to index slicing if timestamp is not available
-            start_idx = 40000
-            end_idx = 50000
-            df = df.iloc[start_idx:end_idx].reset_index(drop=True)
-            x_axis = df.index
-            x_label = 'Sample Index'
-        
-        fig, axes = plt.subplots(2, 1, figsize=(12, 10), sharex=True)
-        
-        # Plot pitch
-        if 'pitch-rad' in df.columns:
-            pitch_vec = df['pitch-rad'] / math.pi * 180
-            axes[0].plot(x_axis, pitch_vec, label='pitch-degrees', color='blue')
-            axes[0].set_ylabel('Pitch (degrees)')
-            axes[0].set_title(f'Data Analysis - {csv_file}')
-            axes[0].legend()
-            axes[0].grid(ls="--")
-        else:
-            print(f"Column 'pitch-rad' not found in {csv_file}")
+            # Fallback for data without timestamps
+            start_idx, end_idx = 40000, 50000
+            df = df.iloc[start_idx:end_idx].copy()
+            x_axis = np.arange(len(df))
+            x_label = "Sample Index"
 
-        # Plot speed
-        speed_col = 'front_axle_spd-kph'
-        if speed_col in df.columns:
-            axes[1].plot(x_axis, df[speed_col], label='Speed (kph)', color='green')
-            axes[1].set_xlabel(x_label)
-            axes[1].set_ylabel('Speed (kph)')
-            axes[1].legend()
-            axes[1].grid(ls="--")
-        else:
-            print(f"Column '{speed_col}' not found in {csv_file}")
-            print(f"Available columns: {df.columns.tolist()}")
+        # Calculate physics components if required columns exist
+        required_cols = [
+            "front_axle_spd-kph",
+            "longitudinal_acc-m/s2",
+            "pitch-rad",
+            "act_eng_percent_trq-0~100",
+            "eng_spd",
+        ]
+        if all(col in df.columns for col in required_cols):
+            df = calculate_physics_components(df)
+
+        # Generate Subplots
+        fig, axes = plt.subplots(7, 1, figsize=(12, 18), sharex=True)
+
+        # 1. Pitch
+        if "pitch-rad" in df.columns:
+            axes[0].plot(x_axis, df["pitch-rad"] * 180 / math.pi, color="blue", label="Pitch")
+            axes[0].set_ylabel("Pitch (deg)")
+            axes[0].set_title(f"Data Analysis - {csv_file}")
+
+        # 2. Speed
+        if "front_axle_spd-kph" in df.columns:
+            axes[1].plot(x_axis, df["front_axle_spd-kph"], color="green", label="Speed")
+            axes[1].set_ylabel("Speed (kph)")
+
+        # 3. Engine Power
+        if "power_engine" in df.columns:
+            axes[2].plot(x_axis, df["power_engine"] / 1000.0, color="red", label="Engine Power")
+            axes[2].set_ylabel("Power (kW)")
+
+        # 4. Aero Drag Force
+        if "force_aero" in df.columns:
+            axes[3].plot(x_axis, df["force_aero"], color="orange", label="Aero Drag")
+            axes[3].set_ylabel("Aero Drag (N)")
+
+        # 5. Gravitational Force
+        if "force_grav" in df.columns:
+            axes[4].plot(x_axis, df["force_grav"], color="purple", label="Grav Force")
+            axes[4].set_ylabel("Grav Force (N)")
+
+        # 6. Rolling Resistance Force
+        if "force_roll" in df.columns:
+            axes[5].plot(x_axis, df["force_roll"], color="brown", label="Roll Res")
+            axes[5].set_ylabel("Roll Res (N)")
+
+        # 7. Inertial Force
+        if "force_inertial" in df.columns:
+            axes[6].plot(x_axis, df["force_inertial"], color="gray", label="Inertial Force")
+            axes[6].set_ylabel("Inertial (N)")
+            axes[6].set_xlabel(x_label)
+
+        for ax in axes:
+            ax.grid(ls="--")
+            ax.legend(loc="upper right")
 
         plt.tight_layout()
         output_plot = os.path.join(data_dir, f"{os.path.splitext(csv_file)[0]}_analysis.png")
         fig.savefig(output_plot)
         plt.close(fig)
-        print(f"Saved plot to {output_plot}")
-            
+        print(f"Saved analysis plot to {output_plot}")
+
     except Exception as e:
         print(f"Error processing {csv_file}: {e}")
 
-def prepare_model_data(df):
-    # Required columns
-    required_cols = [
-        'front_axle_spd-kph', 
-        'longitudinal_acc-m/s2', 
-        'pitch-rad', 
-        'act_eng_percent_trq-0~100', 
-        'eng_spd'
-    ]
-    
-    # Drop rows with NaNs in required columns
-    df_clean = df.dropna(subset=required_cols).copy()
-    
-    # Filter for data with speed higher than 30 kph
-    # df_clean = df_clean[df_clean['front_axle_spd-kph'] > 30].copy()
-    # df_clean = df_clean[df_clean['act_eng_percent_trq-0~100'] > 0.1].copy()
-    df_clean.reset_index(drop=True, inplace=True)
-    
-    if df_clean.empty:
-        return np.array([]).reshape(0, 4), np.array([])
-    
-    # Pre-known constants (using 1.0 as placeholders as they weren't specified)
-    rho = 1.225  # Air density (kg/m3)
-    Cair = 0.538   # Aerodynamic drag area (m2)
-    A = 9.7    # Frontal area (m2)
-    c1 = A * Cair * rho / 2.0  # Aerodynamic drag coefficient
-
-    m = 49000.0  # Vehicle mass (kg)
-    g = 9.81     # Gravitational acceleration (m/s2)
-    mu = 0.004  # Rolling resistance coefficient
-
-    # Rolling resistance coefficient
-    c2 = m * g * mu
-
-    # Gravitational component coefficient
-    c3 = m * g
-
-    # Inertial component coefficient
-    c4 = m
-    
-    # Vehicle speed in m/s
-    v = df_clean['front_axle_spd-kph'] / 3.6
-    # Acceleration in m/s2
-    a = df_clean['longitudinal_acc-m/s2']
-    # Pitch in rad
-    theta = df_clean['pitch-rad']
-    
-    # Torque (Nm) - using 385 as T_max from user instruction
-    T_max = 2500.0  # Maximum engine torque (Nm)
-    torque = (df_clean['act_eng_percent_trq-0~100'] / 100.0) * T_max
-    # Angular velocity (rad/s) from RPM
-    omega = df_clean['eng_spd'] * math.pi / 30.0
-    # Power (W)
-    power = torque * omega
-    
-    # Model features: P = p1*c1*v^3 + p2*c2*cos(theta)*v + p3*c3*sin(theta)*v + p4*c4*a*v
-    X = np.column_stack([
-        c1 * (v**3),
-        c2 * np.cos(theta) * v,
-        c3 * np.sin(theta) * v,
-        c4 * a * v,
-        np.ones(len(v)) # for the offset p5
-    ])
-    
-    return X, power
 
 def estimate_and_test_model():
+    """
+    Perform nonlinear regression to estimate model parameters and evaluate on test data.
+    """
     data_dir = os.path.dirname(os.path.abspath(__file__))
-    train_file_name = "2024-07-05-09-53-49_10030--去程.csv"
-    test_file_name = "2024-07-05-15-46-42_10030--回程.csv"
-    # train_file_name, test_file_name = test_file_name, train_file_name  # Swap for another testing
-    
-    train_path = os.path.join(data_dir, train_file_name)
-    test_path = os.path.join(data_dir, test_file_name)
-    
-    if not os.path.exists(train_path) or not os.path.exists(test_path):
+    train_file = "2024-07-05-09-53-49_10030--去程.csv"
+    test_file = "2024-07-05-15-46-42_10030--回程.csv"
+
+    train_path = os.path.join(data_dir, train_file)
+    test_path = os.path.join(data_dir, test_file)
+
+    if not (os.path.exists(train_path) and os.path.exists(test_path)):
         print("Training or testing files missing for model estimation.")
         return
 
-    print(f"Fitting model using {train_file_name}...")
+    print(f"Fitting model using {train_file}...")
     df_train = pd.read_csv(train_path)
     X_train, y_train = prepare_model_data(df_train)
-    
-    # Nonlinear regression fit with non-negative constraints for p1-p4
-    initial_guess = [0.0, 0.0, 0.0, 0.0, 0.0]
-    # Define bounds: (p1, p2, p3, p4, p5)
-    # p1-p4: [0, inf), p5: (-inf, inf)
-    # bounds = ([1.0, 1.0, 1.0, 1.0, -np.inf], [np.inf, np.inf, np.inf, np.inf, np.inf])
+
+    if X_train.size == 0:
+        print("No valid data for model fitting.")
+        return
+
+    # Parameter constraints (p1-p5)
+    # p1, p3: >= 0
+    # p2, p4: constrained to very small values as per original script logic
     bounds = ([0.0, 0.0, 0.0, 0.0, -np.inf], [np.inf, 1e-6, np.inf, 1e-6, np.inf])
-    # bounds = ([-np.inf, -np.inf, -np.inf, -np.inf, -np.inf], [np.inf, np.inf, np.inf, np.inf, np.inf])
-    
+    initial_guess = [1.0, 0.0, 1.0, 0.0, 0.0]
+
     try:
-        params, pcov = curve_fit(nonlinear_model, X_train, y_train, p0=initial_guess, bounds=bounds)
+        params, _ = curve_fit(nonlinear_model, X_train, y_train, p0=initial_guess, bounds=bounds)
     except Exception as e:
-        print(f"Nonlinear fit failed: {e}")
-        # Fallback to least squares if nonlinear fit fails
-        params, residuals, rank, s = np.linalg.lstsq(X_train, y_train, rcond=None)
-        
-    print("Estimated Parameters:")
+        print(f"Nonlinear fit failed: {e}. Falling back to least squares.")
+        params, _, _, _ = np.linalg.lstsq(X_train, y_train, rcond=None)
+
+    print("Estimated Parameters (p1-p5):")
     for i, p in enumerate(params, 1):
         print(f"  p{i}: {p:.6f}")
-        
-    print(f"\nTesting model using {test_file_name}...")
+
+    print(f"\nEvaluating model using {test_file}...")
     df_test = pd.read_csv(test_path)
     X_test, y_test = prepare_model_data(df_test)
-    X_test, y_test = X_train, y_train  # For demonstration, use training data as test data
-    
+
+    if X_test.size == 0:
+        print("No valid test data found. Using training data for visualization.")
+        X_test, y_test = X_train, y_train
+
     y_pred = nonlinear_model(X_test, *params)
-    
-    # Calculate performance metrics
-    mse = np.mean((y_test - y_pred)**2)
+
+    # Performance metrics
+    mse = np.mean((y_test - y_pred) ** 2)
     rmse = np.sqrt(mse)
     mae = np.mean(np.abs(y_test - y_pred))
-    r2 = 1 - (np.sum((y_test - y_pred)**2) / np.sum((y_test - np.mean(y_test))**2))
-    
-    print(f"Performance on test set:")
+    r2 = 1 - (np.sum((y_test - y_pred) ** 2) / np.sum((y_test - np.mean(y_test)) ** 2))
+
+    print(f"Performance Metrics:")
     print(f"  RMSE: {rmse:.2f} W")
     print(f"  MAE: {mae:.2f} W")
     print(f"  R2 Score: {r2:.4f}")
-    
-    # Plot results
+
+    # Plot Comparison
     plt.figure(figsize=(12, 6))
-    idx = 1000
-    # Use y_test directly as it might be a numpy array
-    plt.plot(y_test[:idx], label='Actual Power', alpha=0.7)
-    plt.plot(y_pred[:idx], label='Predicted Power', alpha=0.7, linestyle='--')
-    plt.title('Power Prediction: Actual vs Model (First 1000 samples of Test Set)')
-    plt.xlabel('Sample Index')
-    plt.ylabel('Power (W)')
+    plt.plot(y_test[:1000], label="Actual Power", alpha=0.7)
+    plt.plot(y_pred[:1000], label="Predicted Power", alpha=0.7, linestyle="--")
+    plt.title("Power Prediction: Actual vs Model (First 1000 samples)")
+    plt.xlabel("Sample Index")
+    plt.ylabel("Power (W)")
     plt.legend()
-    plt.grid(True, ls='--')
-    
+    plt.grid(True, ls="--")
+
     output_plot = os.path.join(data_dir, "model_fitting_results.png")
     plt.savefig(output_plot)
     plt.close()
     print(f"Saved model comparison plot to {output_plot}")
 
-def analyze_data():
+
+def run_analysis():
+    """
+    Main entry point for data analysis and model estimation.
+    """
     data_dir = os.path.dirname(os.path.abspath(__file__))
-    csv_files = [f for f in os.listdir(data_dir) if f.endswith('.csv')]
-    
+    csv_files = [f for f in os.listdir(data_dir) if f.endswith(".csv")]
+    matplotlib.use("Agg")  # Use non-interactive backend
+    matplotlib.rc("font", family='Songti SC')
+    # matplotlib.rc("font", family='STSong')  # For Chinese characters
+    # matplotlib.rc("font", **{"sans-serif": ["SimSun", "Arial"]})
+
     if not csv_files:
-        print("No CSV files found in", data_dir)
+        print(f"No CSV files found in {data_dir}")
         return
 
+    # Process each CSV
     for csv_file in csv_files:
         file_path = os.path.join(data_dir, csv_file)
         analyze_one_csv(file_path, csv_file, data_dir)
-    
-    # Run model estimation and testing
+
+    # Fit and evaluate model
     estimate_and_test_model()
-        
+
 
 if __name__ == "__main__":
-    analyze_data()
+    run_analysis()
