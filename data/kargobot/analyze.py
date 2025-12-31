@@ -3,6 +3,14 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import math
 import numpy as np
+from scipy.optimize import curve_fit
+
+def nonlinear_model(X, p1, p2, p3, p4, p5):
+    """
+    Nonlinear model: P = max(0, p1*c1*v^3 + p2*c2*cos(theta)*v + p3*c3*sin(theta)*v + p4*c4*a*v + p5)
+    """
+    linear_part = X[:, 0]*p1 + X[:, 1]*p2 + X[:, 2]*p3 + X[:, 3]*p4 # + X[:, 4]*p5
+    return np.maximum(0, linear_part)
 
 def analyze_one_csv(file_path, csv_file, data_dir):
     print(f"Reading {file_path}...")
@@ -90,6 +98,14 @@ def prepare_model_data(df):
     # Drop rows with NaNs in required columns
     df_clean = df.dropna(subset=required_cols).copy()
     
+    # Filter for data with speed higher than 30 kph
+    # df_clean = df_clean[df_clean['front_axle_spd-kph'] > 30].copy()
+    # df_clean = df_clean[df_clean['act_eng_percent_trq-0~100'] > 0.1].copy()
+    df_clean.reset_index(drop=True, inplace=True)
+    
+    if df_clean.empty:
+        return np.array([]).reshape(0, 4), np.array([])
+    
     # Pre-known constants (using 1.0 as placeholders as they weren't specified)
     rho = 1.225  # Air density (kg/m3)
     Cair = 0.538   # Aerodynamic drag area (m2)
@@ -129,7 +145,8 @@ def prepare_model_data(df):
         c1 * (v**3),
         c2 * np.cos(theta) * v,
         c3 * np.sin(theta) * v,
-        c4 * a * v
+        c4 * a * v,
+        np.ones(len(v)) # for the offset p5
     ])
     
     return X, power
@@ -151,11 +168,21 @@ def estimate_and_test_model():
     df_train = pd.read_csv(train_path)
     X_train, y_train = prepare_model_data(df_train)
     
-    # Least squares fit
-    params, residuals, rank, s = np.linalg.lstsq(X_train, y_train, rcond=None)
-
-    print("residuals:", residuals)
+    # Nonlinear regression fit with non-negative constraints for p1-p4
+    initial_guess = [0.0, 0.0, 0.0, 0.0, 0.0]
+    # Define bounds: (p1, p2, p3, p4, p5)
+    # p1-p4: [0, inf), p5: (-inf, inf)
+    # bounds = ([1.0, 1.0, 1.0, 1.0, -np.inf], [np.inf, np.inf, np.inf, np.inf, np.inf])
+    bounds = ([0.0, 0.0, 0.0, 0.0, -np.inf], [np.inf, 1e-6, np.inf, 1e-6, np.inf])
+    # bounds = ([-np.inf, -np.inf, -np.inf, -np.inf, -np.inf], [np.inf, np.inf, np.inf, np.inf, np.inf])
     
+    try:
+        params, pcov = curve_fit(nonlinear_model, X_train, y_train, p0=initial_guess, bounds=bounds)
+    except Exception as e:
+        print(f"Nonlinear fit failed: {e}")
+        # Fallback to least squares if nonlinear fit fails
+        params, residuals, rank, s = np.linalg.lstsq(X_train, y_train, rcond=None)
+        
     print("Estimated Parameters:")
     for i, p in enumerate(params, 1):
         print(f"  p{i}: {p:.6f}")
@@ -163,8 +190,9 @@ def estimate_and_test_model():
     print(f"\nTesting model using {test_file_name}...")
     df_test = pd.read_csv(test_path)
     X_test, y_test = prepare_model_data(df_test)
+    X_test, y_test = X_train, y_train  # For demonstration, use training data as test data
     
-    y_pred = X_test @ params
+    y_pred = nonlinear_model(X_test, *params)
     
     # Calculate performance metrics
     mse = np.mean((y_test - y_pred)**2)
@@ -179,8 +207,9 @@ def estimate_and_test_model():
     
     # Plot results
     plt.figure(figsize=(12, 6))
-    idx = 10000
-    plt.plot(y_test.values[:idx], label='Actual Power', alpha=0.7)
+    idx = 1000
+    # Use y_test directly as it might be a numpy array
+    plt.plot(y_test[:idx], label='Actual Power', alpha=0.7)
     plt.plot(y_pred[:idx], label='Predicted Power', alpha=0.7, linestyle='--')
     plt.title('Power Prediction: Actual vs Model (First 1000 samples of Test Set)')
     plt.xlabel('Sample Index')

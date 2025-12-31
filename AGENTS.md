@@ -5,11 +5,6 @@ This document outlines the conventions and commands for agentic coding agents wo
 ## 1. Build/Lint/Test Commands
 
 *   **No explicit build process:** This is a Python project and typically doesn't require a separate build step.
-*   **Linting:** Use `flake8` or `pylint` for linting.
-    *   To lint all files: `flake8 .` or `pylint **/*.py`
-    *   To lint a single file: `flake8 <file_path>` or `pylint <file_path>`
-*   **Testing:** There are no dedicated test files. For testing `j1939Parser.py`, you can run its `if __name__ == "__main__":` block directly.
-    *   To run `j1939Parser.py` examples: `python j1939Parser.py`
 
 ## 2. Code Style Guidelines
 
