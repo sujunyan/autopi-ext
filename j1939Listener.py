@@ -129,6 +129,7 @@ class J1939Listener(Listener):
             61443: (no_interval, "accelerator pedal 1 low idle switch"),
             61450: (no_interval, "inlet air mass flow rate"),
             65153: (no_interval, "fuel flow rate"),
+            65132: (no_interval, "tachograph vehicle speed"),
         }
         return pgn_dict
 
