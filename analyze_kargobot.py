@@ -7,46 +7,83 @@ from scipy.optimize import curve_fit
 import matplotlib
 
 # --- Constants for Vehicle Physics ---
-RHO = 1.225  # Air density (kg/m3)
-CAIR = 0.538  # Aerodynamic drag area (m2)
-A = 9.7  # Frontal area (m2)
-M = 49000.0  # Vehicle mass (kg)
-G = 9.81  # Gravitational acceleration (m/s2)
-MU = 0.004  # Rolling resistance coefficient
-T_MAX = 2500.0  # Maximum engine torque (Nm)
-
-# Derived physical coefficients
-C_AERO = A * CAIR * RHO / 2.0
-C_ROLL = M * G * MU
-C_GRAV = M * G
-C_INERTIAL = M
-
+g_vehicle_params = {
+    "mass_kg": 49000.0,
+    "frontal_area_m2": 9.7,
+    "drag_area_m2": 0.538,
+    "air_density_kgm3": 1.225,
+    "rolling_resistance_factor": 0.004,
+    "max_torque_nm": 2500.0,
+    "gravity_ms2": 9.81,
+}
 
 def nonlinear_model(X, p1, p2, p3, p4, p5):
     """
     Nonlinear model for power prediction.
-    P = max(0, p1*c1*v^3 + p2*c2*cos(theta)*v + p3*c3*sin(theta)*v + p4*c4*a*v + p5)
+    P = max(0, P_hat)
     """
-    linear_part = X[:, 0] * p1 + X[:, 1] * p2 + X[:, 2] * p3 + X[:, 3] * p4 + X[:, 4] * p5
-    return np.maximum(0, linear_part)
+    acc = X[:, 0]
+    v = X[:, 1]
+    theta = X[:, 2]
+    theta = theta - p5 * acc  # Adjust pitch if needed
+    # offset = X[:, 3]
+
+    # Unpack vehicle parameters
+    m = g_vehicle_params["mass_kg"]
+    drag_area = g_vehicle_params["drag_area_m2"]
+    air_density = g_vehicle_params["air_density_kgm3"]
+    mu = g_vehicle_params["rolling_resistance_factor"]
+    g =  g_vehicle_params["gravity_ms2"]
+    # T_MAX = vehicle_params["max_torque_nm"]
+
+    # Calculate coefficients
+
+    # Calculate individual forces (N)
+    force_aero = 0.5 * air_density * drag_area * (v ** 2)
+    force_roll = mu * m * g * np.cos(theta)
+    force_grav = m * g * np.sin(theta)
+    force_inertial = m * acc
+
+    p_hat = p1 * force_aero * v + p2 * force_roll * v + p3 * force_grav * v + p4 * force_inertial * v
+
+    return np.maximum(0, p_hat)
 
 
-def calculate_physics_components(df):
+def calculate_physics_components(df, vehicle_params):
     """
     Calculate engine power and individual force components from raw data.
     """
     # Base physical variables
     v = df["front_axle_spd-kph"] / 3.6  # velocity in m/s
     a = df["longitudinal_acc-m/s2"]  # acceleration in m/s2
+    ts = df["timestamp-ns"]
+    acc = np.gradient(v, ts)  # Numerical differentiation
     theta = df["pitch-rad"]  # pitch in rad
     trq_pct = df["act_eng_percent_trq-0~100"]
     eng_spd_rpm = df["eng_spd"]
 
+    # Unpack vehicle parameters
+    m = vehicle_params["mass_kg"]
+    drag_area = vehicle_params["drag_area_m2"]
+    air_density = vehicle_params["air_density_kgm3"]
+    mu = vehicle_params["rolling_resistance_factor"]
+    g = vehicle_params["gravity_ms2"]
+    T_MAX = vehicle_params["max_torque_nm"]
+
+    # Calculate coefficients
+
     # Calculate individual forces (N)
-    df["force_aero"] = C_AERO * (v**2)
-    df["force_roll"] = C_ROLL * np.cos(theta)
-    df["force_grav"] = C_GRAV * np.sin(theta)
-    df["force_inertial"] = C_INERTIAL * a
+    df["force_aero"] = 0.5 * air_density * drag_area * (v ** 2)
+    df["force_roll"] = mu * m * g * np.cos(theta)
+    df["force_grav"] = m * g * np.sin(theta)
+    df["force_inertial"] = m * acc
+
+    # Calculate individual forces (N)
+    # df["force_aero"] = C_AERO * (v**2)
+    # df["force_roll"] = C_ROLL * np.cos(theta)
+    # df["force_grav"] = C_GRAV * np.sin(theta)
+    # df["force_inertial"] = C_INERTIAL * a
+
 
     # Calculate engine power (W)
     torque = (trq_pct / 100.0) * T_MAX
@@ -56,7 +93,7 @@ def calculate_physics_components(df):
     return df
 
 
-def prepare_model_data(df):
+def prepare_model_data(df, vehicle_params):
     """
     Clean data and prepare features/target for model fitting.
     """
@@ -67,26 +104,48 @@ def prepare_model_data(df):
         "act_eng_percent_trq-0~100",
         "eng_spd",
     ]
+    df = df.copy()
+
+    # Handle duplicate timestamps with uniform interpolation
+    counts = df.groupby("timestamp-ns")["timestamp-ns"].transform("count")
+    cumcounts = df.groupby("timestamp-ns").cumcount()
+    df["timestamp-ns"] = df["timestamp-ns"] + cumcounts / counts
+
+    df = df.sort_values("timestamp-ns").reset_index(drop=True)
+    ts = df["timestamp-ns"]
+    v = df["front_axle_spd-kph"] / 3.6
+    # acc = df_clean["longitudinal_acc-m/s2"]
+    acc = np.gradient(v, ts)  # Numerical differentiation
+    df["acc"] = acc
+
+    df = df[df["front_axle_spd-kph"] > 0.1]  # Remove stationary data
+    df = df[df["brk_pedal_pos"] == 0]  # Remove thebraking events if column exists
+    df = df[df["trans_cur_gear"] != 0]  # Remove neutral gear if column exists
+    df.reset_index(drop=True, inplace=True)
 
     # Drop rows with NaNs in required columns
-    df_clean = df.dropna(subset=required_cols).copy()
+    df_clean = df.dropna(subset=required_cols)
     if df_clean.empty:
         return np.empty((0, 5)), np.array([])
 
-    v = df_clean["front_axle_spd-kph"] / 3.6
-    a = df_clean["longitudinal_acc-m/s2"]
+   
     theta = df_clean["pitch-rad"]
+    acc = df_clean["acc"]
+    v = df_clean["front_axle_spd-kph"] / 3.6
+
 
     # Feature matrix X: [P_aero_base, P_roll_base, P_grav_base, P_accel_base, Offset]
+    # Feature matrix X: [acc, v, theta, offset]
     X = np.column_stack(
         [
-            C_AERO * (v**3),
-            C_ROLL * np.cos(theta) * v,
-            C_GRAV * np.sin(theta) * v,
-            C_INERTIAL * a * v,
+            acc, 
+            v,
+            theta,
             np.ones(len(v)),
         ]
     )
+
+    T_MAX = vehicle_params["max_torque_nm"]
 
     # Target y: Actual Engine Power
     torque = (df_clean["act_eng_percent_trq-0~100"] / 100.0) * T_MAX
@@ -142,7 +201,7 @@ def analyze_one_csv(file_path, csv_file, data_dir):
             "eng_spd",
         ]
         if all(col in df.columns for col in required_cols):
-            df = calculate_physics_components(df)
+            df = calculate_physics_components(df, g_vehicle_params)
 
         # Generate Subplots
         fig, axes = plt.subplots(7, 1, figsize=(12, 18), sharex=True)
@@ -203,6 +262,7 @@ def estimate_and_test_model():
     Perform nonlinear regression to estimate model parameters and evaluate on test data.
     """
     data_dir = os.path.dirname(os.path.abspath(__file__))
+    data_dir = os.path.join(data_dir, "data", "kargobot")
     train_file = "2024-07-05-09-53-49_10030--去程.csv"
     test_file = "2024-07-05-15-46-42_10030--回程.csv"
 
@@ -215,7 +275,7 @@ def estimate_and_test_model():
 
     print(f"Fitting model using {train_file}...")
     df_train = pd.read_csv(train_path)
-    X_train, y_train = prepare_model_data(df_train)
+    X_train, y_train = prepare_model_data(df_train, g_vehicle_params)
 
     if X_train.size == 0:
         print("No valid data for model fitting.")
@@ -224,8 +284,10 @@ def estimate_and_test_model():
     # Parameter constraints (p1-p5)
     # p1, p3: >= 0
     # p2, p4: constrained to very small values as per original script logic
-    bounds = ([0.0, 0.0, 0.0, 0.0, -np.inf], [np.inf, 1e-6, np.inf, 1e-6, np.inf])
-    initial_guess = [1.0, 0.0, 1.0, 0.0, 0.0]
+    # bounds = ([0.0, 0.0, 0.0, 0.0, -np.inf], [np.inf, 1e-6, np.inf, 1e-6, np.inf])
+    # bounds = ([0.0, 0.0, 0.0, 0.0, -np.inf], [np.inf, np.inf, np.inf, np.inf, np.inf])
+    bounds = ([-np.inf, -np.inf, -np.inf, -np.inf, -np.inf], [np.inf, np.inf, np.inf, np.inf, np.inf])
+    initial_guess = [1.0, 1.0, 1.0, 1.0, 1.0]
 
     try:
         params, _ = curve_fit(nonlinear_model, X_train, y_train, p0=initial_guess, bounds=bounds)
@@ -239,7 +301,7 @@ def estimate_and_test_model():
 
     print(f"\nEvaluating model using {test_file}...")
     df_test = pd.read_csv(test_path)
-    X_test, y_test = prepare_model_data(df_test)
+    X_test, y_test = prepare_model_data(df_test, g_vehicle_params)
 
     if X_test.size == 0:
         print("No valid test data found. Using training data for visualization.")
@@ -260,8 +322,8 @@ def estimate_and_test_model():
 
     # Plot Comparison
     plt.figure(figsize=(12, 6))
-    plt.plot(y_test[:1000], label="Actual Power", alpha=0.7)
-    plt.plot(y_pred[:1000], label="Predicted Power", alpha=0.7, linestyle="--")
+    plt.plot(y_test[:10000], label="Actual Power", alpha=0.7)
+    plt.plot(y_pred[:10000], label="Predicted Power", alpha=0.7, linestyle="--")
     plt.title("Power Prediction: Actual vs Model (First 1000 samples)")
     plt.xlabel("Sample Index")
     plt.ylabel("Power (W)")
@@ -279,6 +341,7 @@ def run_analysis():
     Main entry point for data analysis and model estimation.
     """
     data_dir = os.path.dirname(os.path.abspath(__file__))
+    data_dir = os.path.join(data_dir, "data", "kargobot")
     csv_files = [f for f in os.listdir(data_dir) if f.endswith(".csv")]
     matplotlib.use("Agg")  # Use non-interactive backend
     matplotlib.rc("font", family='Songti SC')
