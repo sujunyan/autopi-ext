@@ -96,7 +96,7 @@ class J1939Listener(Listener):
 
     def pgn2time_interval(self, pgn):
         
-        pgn_dict = self.parser.get_pgn_dict()
+        pgn_dict = self.get_pgn_dict()
         tt = pgn_dict.get(pgn, (1.0, "Unknown PGN"))
 
         return tt[0]
@@ -133,7 +133,7 @@ class J1939Listener(Listener):
         return pgn_dict
 
     def get_pgn_name(self, pgn):
-        pgn_dict = self.parser.get_pgn_dict()
+        pgn_dict = self.get_pgn_dict()
         tt = pgn_dict.get(pgn, (-1.0, "Unknown PGN"))
 
         return tt[1]
