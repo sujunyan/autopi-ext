@@ -95,41 +95,54 @@ class J1939Listener(Listener):
         logger.info("PGN scan complete")
 
     def pgn2time_interval(self, pgn):
+        
+        pgn_dict = self.parser.get_pgn_dict()
+        tt = pgn_dict.get(pgn, (1.0, "Unknown PGN"))
+
+        return tt[0]
+
+    def get_pgn_dict(self):
         no_interval = -1.0
         fast_interval = 0.2
         default_interval = 1.0
         slow_interval = 60.0
         slower_interval = 300.0
-
-        pgn2time_d = {
-            65265: fast_interval,
-            65256: fast_interval,
-            65215: default_interval,
-            65266: default_interval,
-            65248: default_interval,
-            65199: slow_interval,
-            65257: slow_interval,
-            61444: slow_interval,
-            65276: slow_interval,
-            65201: slow_interval,
-            65202: slow_interval,
-            65253: slower_interval,
-            65255: slower_interval,
-            65263: slower_interval,
-            65244: slower_interval,
-            65217: slower_interval,
-            65262: no_interval,
-            65194: no_interval,
-            61443: no_interval,
-            61450: no_interval,
-            65153: no_interval,
+        pgn_dict = {
+            65265: (fast_interval,  "vehicle speed"),
+            65256: (fast_interval,  "navigation speed & pitch"),
+            61444: (fast_interval,  "engine speed and torque"),
+            65215: (default_interval,  "front axle speed"),
+            65266: (default_interval,  "fuel rate"),
+            65217: (default_interval, "high resolution total vehicle distance"),
+            65248: (slow_interval,  "trip distance"),
+            65199: (slow_interval,  "Trip fuel (gaseous)"),
+            65257: (slow_interval,  "Trip fuel (liquid)"),
+            65276: (slow_interval, "fuel level"),
+            65201: (slow_interval, "ECU Distance"),
+            65202: (slow_interval, "trip average Fuel rate (gaseous)"),
+            65253: (slower_interval, "total engine hours"),
+            65255: (slower_interval, "total vehicle hours"),
+            65263: (slower_interval, "engine oil level"),
+            65244: (slower_interval, "total idel fuel used"),
+            65262: (no_interval, "fuel temperature"),
+            65194: (no_interval, "gaseous fuel correction factor"),
+            61443: (no_interval, "accelerator pedal 1 low idle switch"),
+            61450: (no_interval, "inlet air mass flow rate"),
+            65153: (no_interval, "fuel flow rate"),
         }
-        return pgn2time_d.get(pgn, default_interval)
+        return pgn_dict
+
+    def get_pgn_name(self, pgn):
+        pgn_dict = self.parser.get_pgn_dict()
+        tt = pgn_dict.get(pgn, (-1.0, "Unknown PGN"))
+
+        return tt[1]
+
 
     def ca_receive(self, priority, pgn, source, timestamp, data):
         if pgn not in self.available_pgns and pgn in self.all_pgns:
             self.available_pgns.add(pgn)
-            logger.info(f"Discovered new PGN: {pgn}.")
+            logger.info(f"Discovered new PGN: {pgn} ({self.get_pgn_name(pgn)})")
 
         self.save_raw_data_csv(pgn, timestamp, data)
         parsed_j1939_data = self.parser.parse_data(pgn, data)

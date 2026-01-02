@@ -116,7 +116,7 @@ def analyze_one_csv(file_path, csv_file, data_dir):
 
             # Adjustable time window
             # start_time, end_time = 50 * 60, 75 * 60
-            start_time, end_time = 50 * 60, 55 * 60
+            start_time, end_time = 55 * 60, 60 * 60
             mask = (relative_time_sec >= start_time) & (relative_time_sec <= end_time)
             df = df[mask].copy()
 
