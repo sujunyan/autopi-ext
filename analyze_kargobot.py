@@ -132,6 +132,8 @@ def prepare_model_data(df, vehicle_params):
     theta = df_clean["pitch-rad"]
     acc = df_clean["acc"]
     v = df_clean["front_axle_spd-kph"] / 3.6
+    avg_v = np.mean(v)
+    print(f"Average Speed {avg_v * 3.6} (km/h):")
 
 
     # Feature matrix X: [P_aero_base, P_roll_base, P_grav_base, P_accel_base, Offset]
