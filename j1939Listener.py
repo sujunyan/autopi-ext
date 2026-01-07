@@ -7,6 +7,8 @@ import time
 from datetime import datetime
 from pathlib import Path
 
+from logger import config_logger
+
 import j1939
 from j1939Parser import J1939Parser
 from listener import Listener
@@ -33,6 +35,7 @@ class J1939Listener(Listener):
         ca_address=0xF9,
         can_channel="can0",
         bustype="socketcan",
+        can_rate=250000,
         mqtt_broker="localhost",
     ):
         super().__init__(name="J1939", mqtt_broker=mqtt_broker)
@@ -40,6 +43,7 @@ class J1939Listener(Listener):
         self.ca_address = ca_address
         self.can_channel = can_channel
         self.bustype = bustype
+        self.can_rate = can_rate
         self.ecu = None
         self.ca = None
         self.parser = J1939Parser()
@@ -68,7 +72,7 @@ class J1939Listener(Listener):
             self.ca.subscribe(self.ca_receive)
             self.ca.start()
             self.enable = True
-            logger.info("J1939Listener setup complete.")
+            logger.info(f"J1939Listener setup complete on {self.can_channel}.")
         except Exception as e:
             logger.error(f"J1939 setup error: {e}")
             self.enable = False
@@ -144,6 +148,7 @@ class J1939Listener(Listener):
         if pgn not in self.available_pgns and pgn in self.all_pgns:
             self.available_pgns.add(pgn)
             logger.info(f"Discovered new PGN: {pgn} ({self.get_pgn_name(pgn)})")
+        logger.debug(f"Got a PGN: {pgn} with data {data}")
 
         self.save_raw_data_csv(pgn, timestamp, data)
         parsed_j1939_data = self.parser.parse_data(pgn, data)
@@ -199,8 +204,9 @@ class J1939Listener(Listener):
 
     def setup_can_interface(self):
         can_channel = self.can_channel
-        can_rate = 250000
-        cmd = f"sudo ip link set {can_channel} down && sudo ip link set {can_channel} up type can bitrate {can_rate}"
+        # can_rate = 250000
+        can_rate = self.can_rate 
+        cmd = f"sudo ip link set {can_channel} down && sudo ip link set {can_channel} up type can bitrate {can_rate} sample-point 0.8"
         try:
             logger.info("Setting up CAN interface...")
             result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
@@ -214,7 +220,7 @@ class J1939Listener(Listener):
             logger.exception(f"Unexpected error setting up CAN interface: {e}")
             return False
 
-    def request_pgn(self, pgn):
+    def request_pgn(self, pgn, data_page=0, destination=0x00, priority=6):
         if not self.ca or self.ca.state != j1939.ControllerApplication.State.NORMAL:
             return True
         data = [
@@ -227,9 +233,9 @@ class J1939Listener(Listener):
             0x00,
             0x00,
         ]
-        destination = 0x00
-        data_page = 0
-        priority = 6
+        # destination = 0x00
+        # data_page = 0
+        # priority = 6
         self.ca.send_pgn(
             data_page,
             (j1939.ParameterGroupNumber.PGN.REQUEST >> 8) & 0xFF,
@@ -238,3 +244,21 @@ class J1939Listener(Listener):
             data,
         )
         return True
+
+if __name__ == "__main__":
+    config_logger(logging.DEBUG)
+    ls = J1939Listener(can_channel="can0", can_rate=500_000)
+    ls.setup()
+    time.sleep(5)
+    priority = 6
+    des = 0x00
+    logger.debug("sending requests")
+    ls.scan_pgns()
+    # for des in range(0, 256):
+    #     logger.debug(f"sending reuqests to des {des}")
+    #     ls.request_pgn(65144, 0, des, priority)
+    #     time.sleep(0.5)
+    
+    time.sleep(5)
+    ls.close() 
+    time.sleep(1)

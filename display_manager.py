@@ -107,7 +107,10 @@ class DisplayManager:
 
     @property
     def enable(self):
-        flag = (self.ser != None)
+        if hasattr(self, 'ser'):
+            flag = (self.ser != None)
+        else:
+            flag = False
 
         return flag
 
@@ -153,6 +156,9 @@ class DisplayManager:
         if speed == None:
             logger.warning("Got a None speed in display manager.")
             return
+        if not self.enable:
+            return
+        
         speed = int(speed)
         self.send_cmd(f"speed_num.val={speed}")
 
