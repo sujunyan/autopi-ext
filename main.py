@@ -27,7 +27,7 @@ logging.getLogger("can").setLevel(logging.DEBUG)
 
 USE_1939 = True
 # Use location simulation mode
-VIRTUAL_SIMULATION_MODE = False
+VIRTUAL_SIMULATION_MODE = True
 
 class E2PilotAutopi:
     def __init__(self):
@@ -106,7 +106,7 @@ class E2PilotAutopi:
         while True:
             if (time.time() - self.last_heart_beat_time) > 2.0:
                 logger.info("Heartbeat msg...")
-                logger.info(f"Current state: speed: {self.current_speed:.2f}km/h, suggest speed: {self.suggest_speed:.2f}km/h, grade: {self.grade:.2f}%, trip distance: {self.trip_distance:.3f}km, follow range: {self.follow_range:.3f}km, follow rate: {self.follow_rate*100:.2f}%, ipt: {self.route_matcher.current_pt_index}")
+                logger.info(f"Current state: speed: {self.current_speed:.2f}km/h, suggest speed: {self.suggest_speed:.2f}km/h, grade: {self.grade:.2f}%, trip distance: {self.trip_distance:.3f}km, follow range: {self.follow_range:.3f}km, follow rate: {self.follow_rate*100:.2f}%, ipt: {self.route_matcher.current_pt_index}, projection dist {self.route_matcher.projection_dist:.2f}m")
                 logger.info(f"latlon: ({self.lat:.6f}, {self.lon:.6f})")
                 self.last_heart_beat_time = time.time()
             if self.virtual_sim_mode:

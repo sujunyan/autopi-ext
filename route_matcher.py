@@ -51,6 +51,7 @@ class RouteMatcher:
         self.current_pt_index = -1
         self.latlon = (0.0, 0.0)
         self.route_name = ""
+        self.projection_dist = -1
 
     @property
     def route_selected(self):
@@ -157,6 +158,8 @@ class RouteMatcher:
                     best_i = i
             return best_i, min_d
 
+        min_dist = -1
+
         # 1. Search in local window if possible
         if self.current_pt_index >= 0:
             start = max(0, self.current_pt_index - 20)
@@ -186,6 +189,10 @@ class RouteMatcher:
                 logger.warning(
                     f"Got a jump of index in the route: cur={self.current_pt_index}, next={best_idx}, jump distance: {dist:.3f}m"
                 )
+
+            if min_dist != -1:
+                self.projection_dist = min_dist
+
             logger.debug(
                     f"Got a index in the route: cur={self.current_pt_index}, next={best_idx}, distance: {min_dist:.3f}m"
                 )
