@@ -17,7 +17,8 @@ def config_logger(level=logging.INFO):
 
     os.makedirs(log_directory, exist_ok=True)
 
-    info_log_filepath = os.path.join(log_directory, f"e2pilot_info_{timestamp}.log")
+    info_log_name = f"e2pilot_info_{timestamp}.log"
+    info_log_filepath = os.path.join(log_directory, info_log_name)
     debug_log_filepath = os.path.join(log_directory, f"e2pilot_debug_{timestamp}.log")
 
     formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -54,10 +55,10 @@ def config_logger(level=logging.INFO):
 
     ## 
     # Create or update symlink to latest log
-    symlink_path = os.path.join(log_directory, "info-latest.log")
+    symlink_path = os.path.join(log_directory, "0.info-latest.log")
     try:
         if os.path.islink(symlink_path) or os.path.exists(symlink_path):
             os.remove(symlink_path)
-        os.symlink(info_log_filepath, symlink_path)
+        os.symlink(info_log_name, symlink_path)
     except Exception as e:
         print(f"Could not create symlink for latest log: {e}")

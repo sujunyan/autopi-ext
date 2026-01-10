@@ -27,7 +27,7 @@ logging.getLogger("can").setLevel(logging.DEBUG)
 
 USE_1939 = True
 # Use location simulation mode
-VIRTUAL_SIMULATION_MODE = False
+VIRTUAL_SIMULATION_MODE = True
 
 class E2PilotAutopi:
     def __init__(self):
