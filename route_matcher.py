@@ -36,7 +36,11 @@ route_name_subset = [
     # "test.2026-01-06.H11-245155-ma1.opt.JuMP.route.json",
     # "test.2026-01-06.H11-245155-ma2.opt.JuMP.route.json",
     # "test.2026-01-06.H11-245155-ma2.opt.JuMP.route.v2.json",
-    "test.2026-01-06.H11-245155-ma2.opt.JuMP.route.v3.json",
+    # "test.2026-01-06.H11-245155-ma2.opt.JuMP.route.v3.json",
+    # "test.2026-01-08_merged_gps_ma1.opt.JuMP.route.v1.json",
+    # "test.2026-01-08_merged_gps_ma2.opt.JuMP.route.v1.json",
+    # "test.2026-01-09_merged_gps_ma1.opt.JuMP.route.v2.json",
+    "test.2026-01-09_merged_gps_ma2.opt.JuMP.route.v2.json"
 ]
 
 
@@ -105,6 +109,10 @@ class RouteMatcher:
         Match the given latitude and longitude to the closest segment in the speedplan.
         Finds index i such that the GPS point is between point i and i+1.
         """
+
+        if not self.route_selected:
+            return None
+
         if not self.all_speedplan_points:
             return None
 
@@ -235,9 +243,9 @@ class RouteMatcher:
 
     def get_suggest_speed_and_grade(self):
         if self.current_pt_index == -1:
-            return 0.0
+            return (0.0, 0.0)
         if not self.route_data:
-            return 0.0
+            return (0.0, 0.0)
 
         point = self.all_speedplan_points[self.current_pt_index]
         next_point = self.get_next_speedplan_point()

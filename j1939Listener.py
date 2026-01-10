@@ -247,17 +247,17 @@ class J1939Listener(Listener):
 
 if __name__ == "__main__":
     config_logger(logging.DEBUG)
-    ls = J1939Listener(can_channel="can0", can_rate=500_000)
+    ls = J1939Listener(can_channel="can0", can_rate=1000_000)
     ls.setup()
     time.sleep(5)
     priority = 6
     des = 0x00
     logger.debug("sending requests")
-    ls.scan_pgns()
-    # for des in range(0, 256):
-    #     logger.debug(f"sending reuqests to des {des}")
-    #     ls.request_pgn(65144, 0, des, priority)
-    #     time.sleep(0.5)
+    # ls.scan_pgns()
+    for des in range(0, 256):
+        logger.debug(f"sending reuqests to des {des}")
+        ls.request_pgn(65144, 0, des, priority)
+        time.sleep(0.5)
     
     time.sleep(5)
     ls.close() 
