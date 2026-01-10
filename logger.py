@@ -51,3 +51,13 @@ def config_logger(level=logging.INFO):
 
     # Ensure the logger itself is at least at the lowest handler level
     logger.setLevel(logging.DEBUG)
+
+    ## 
+    # Create or update symlink to latest log
+    symlink_path = os.path.join(log_directory, "info-latest.log")
+    try:
+        if os.path.islink(symlink_path) or os.path.exists(symlink_path):
+            os.remove(symlink_path)
+        os.symlink(info_log_filepath, symlink_path)
+    except Exception as e:
+        print(f"Could not create symlink for latest log: {e}")

@@ -6,15 +6,16 @@ REMOTE_USER = "pi"
 # REMOTE_HOST = "192.168.124.16"
 # REMOTE_HOST = "autopi-2c72803a87e76f32092fbf0c2226cad2.local"
 REMOTE_HOST = "192.168.4.1"
-REMOTE_DATA_PATH = "/home/pi/autopi-ext/data/"
+REMOTE_DATA_PATH = "/home/pi/autopi-ext/"
 LOCAL_DOWNLOAD_PATH = "/Users/junyansu/dev/autopi-ext/"
 
 # Subfolders and their respective file extensions to clean up
 SUBFOLDERS = {
-    "h11": "*.txt",
-    "j1939": "*.csv",
-    "embedgps": "*.txt",
-    "embedacc": "*.txt",
+    "data/h11": "*.txt",
+    "data/j1939": "*.csv",
+    "data/embedgps": "*.txt",
+    "data/embedacc": "*.txt",
+    "logs/" : "*"
 }
 
 def run_command(command):
@@ -33,23 +34,34 @@ def main():
     
     # Use scp to download the data
     # -r: recursive, -p: preserve attributes
-    scp_cmd = f'scp -r -p {REMOTE_USER}@{REMOTE_HOST}:{REMOTE_DATA_PATH} "{LOCAL_DOWNLOAD_PATH}"'
-    
-    if run_command(scp_cmd) == 0:
+
+    for folder, extension in SUBFOLDERS.items():
+        remote_path = REMOTE_DATA_PATH + folder
+        local_path = LOCAL_DOWNLOAD_PATH  + "data"
+        if folder == "logs/":
+            local_path = LOCAL_DOWNLOAD_PATH  + "logs"
+            
+        scp_cmd = f'scp -r -p {REMOTE_USER}@{REMOTE_HOST}:{remote_path} "{local_path}"'
+        if run_command(scp_cmd) != 0:
+            print(f"Error: Failed to download data from {folder}.")
+            sys.exit(1)
         print("Download successful. Deleting data from remote server...")
+
+        remote_path = os.path.join(REMOTE_DATA_PATH, folder, extension)
+        rm_cmd = f'ssh {REMOTE_USER}@{REMOTE_HOST} "rm -f {remote_path}"'
+        # print(rm_cmd)
+        if run_command(rm_cmd) == 0:
+            print(f"Remote {folder} data cleaned successfully.")
+        else:
+            print(f"Error: Failed to clean remote data in {folder}.")
+            # sys.exit(1)
+    
         
-        for folder, extension in SUBFOLDERS.items():
-            remote_path = os.path.join(REMOTE_DATA_PATH, folder, extension)
-            rm_cmd = f'ssh {REMOTE_USER}@{REMOTE_HOST} "rm -f {remote_path}"'
+    # for folder, extension in SUBFOLDERS.items():
+        
+        
             
-            if run_command(rm_cmd) == 0:
-                print(f"Remote {folder} data cleaned successfully.")
-            else:
-                print(f"Error: Failed to clean remote data in {folder}.")
-            
-    else:
-        print("Error: Download failed. Remote data not deleted.")
-        sys.exit(1)
+    
 
 if __name__ == "__main__":
     main()

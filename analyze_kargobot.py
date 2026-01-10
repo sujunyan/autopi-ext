@@ -25,7 +25,7 @@ def nonlinear_model(X, p1, p2, p3, p4, p5):
     acc = X[:, 0]
     v = X[:, 1]
     theta = X[:, 2]
-    theta = theta - p5 * acc  # Adjust pitch if needed
+    # theta = theta - p5 * acc  # Adjust pitch if needed
     # offset = X[:, 3]
 
     # Unpack vehicle parameters
@@ -39,11 +39,13 @@ def nonlinear_model(X, p1, p2, p3, p4, p5):
     # Calculate coefficients
 
     # Calculate individual forces (N)
-    force_aero = 0.5 * air_density * drag_area * (v ** 2)
+    H = 1.2
+    force_aero = 0.5 * (1-H*0.085) * air_density * drag_area * (v ** 2)
     force_roll = mu * m * g * np.cos(theta)
     force_grav = m * g * np.sin(theta)
     force_inertial = m * acc
 
+    p_hat = p1 * force_aero * v + p2 * force_roll * v + p3 * force_grav * v + p4 * force_inertial * v
     p_hat = p1 * force_aero * v + p2 * force_roll * v + p3 * force_grav * v + p4 * force_inertial * v
 
     return np.maximum(0, p_hat)
@@ -107,9 +109,12 @@ def prepare_model_data(df, vehicle_params):
     df = df.copy()
 
     # Handle duplicate timestamps with uniform interpolation
-    counts = df.groupby("timestamp-ns")["timestamp-ns"].transform("count")
-    cumcounts = df.groupby("timestamp-ns").cumcount()
-    df["timestamp-ns"] = df["timestamp-ns"] + cumcounts / counts
+    # counts = df.groupby("timestamp-ns")["timestamp-ns"].transform("count")
+    # cumcounts = df.groupby("timestamp-ns").cumcount()
+    # df["timestamp-ns"] = df["timestamp-ns"] + cumcounts / counts
+    # Group by 'timestamp-ns' and average other columns
+    df = df.groupby("timestamp-ns", as_index=False).mean()
+    df = df.sort_values("timestamp-ns").reset_index(drop=True)
 
     df = df.sort_values("timestamp-ns").reset_index(drop=True)
     ts = df["timestamp-ns"]
@@ -118,9 +123,11 @@ def prepare_model_data(df, vehicle_params):
     acc = np.gradient(v, ts)  # Numerical differentiation
     df["acc"] = acc
 
+
     df = df[df["front_axle_spd-kph"] > 0.1]  # Remove stationary data
     df = df[df["brk_pedal_pos"] == 0]  # Remove thebraking events if column exists
     df = df[df["trans_cur_gear"] != 0]  # Remove neutral gear if column exists
+    df = df[df["act_eng_percent_trq-0~100"] > 20.0]  # Remove idle engine data
     df.reset_index(drop=True, inplace=True)
 
     # Drop rows with NaNs in required columns
@@ -149,6 +156,7 @@ def prepare_model_data(df, vehicle_params):
 
     T_MAX = vehicle_params["max_torque_nm"]
 
+    
     # Target y: Actual Engine Power
     torque = (df_clean["act_eng_percent_trq-0~100"] / 100.0) * T_MAX
     omega = df_clean["eng_spd"] * math.pi / 30.0
@@ -324,8 +332,8 @@ def estimate_and_test_model():
 
     # Plot Comparison
     plt.figure(figsize=(12, 6))
-    plt.plot(y_test[:10000], label="Actual Power", alpha=0.7)
-    plt.plot(y_pred[:10000], label="Predicted Power", alpha=0.7, linestyle="--")
+    plt.plot(y_test[:1000], label="Actual Power", alpha=0.7)
+    plt.plot(y_pred[:1000], label="Predicted Power", alpha=0.7, linestyle="--")
     plt.title("Power Prediction: Actual vs Model (First 1000 samples)")
     plt.xlabel("Sample Index")
     plt.ylabel("Power (W)")
