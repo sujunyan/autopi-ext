@@ -5,6 +5,24 @@ import os
 
 logger = logging.getLogger("e2pilot_autopi")
 
+class ColorFormatter(logging.Formatter):
+    COLORS = {
+        logging.DEBUG: "\033[36m",    # Cyan
+        logging.INFO: "\033[32m",     # Green
+        logging.WARNING: "\033[33m",  # Yellow
+        logging.ERROR: "\033[31m",    # Red
+        logging.CRITICAL: "\033[41m", # Red background
+    }
+    RESET = "\033[0m"
+    GREY = "\033[90m"
+
+    def format(self, record):
+        color = self.COLORS.get(record.levelno, self.RESET)
+        header = f"{self.GREY}{self.formatTime(record)}{self.RESET} - {record.name} - {color}{record.levelname}{self.RESET}"
+        header = f"{self.GREY}{self.formatTime(record)}{self.RESET} - {color}{record.levelname}{self.RESET}"
+        message = record.getMessage()
+        return f"{header} - {message}"
+
 
 def config_logger(level=logging.INFO):
     """Configure the logger for the j1939_listener module."""
@@ -43,8 +61,12 @@ def config_logger(level=logging.INFO):
 
     # Console handler
     console_handler = logging.StreamHandler()
-    console_handler.setFormatter(formatter)
+    # console_handler.setFormatter(formatter)
     console_handler.setLevel(level)
+
+    # Use ColorFormatter for console handler
+    console_formatter = ColorFormatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    console_handler.setFormatter(console_formatter)
 
     logger.addHandler(info_handler)
     logger.addHandler(debug_handler)
