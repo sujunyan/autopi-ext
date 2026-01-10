@@ -120,6 +120,7 @@ class E2PilotAutopi:
             self.h11_listener,
             self.embed_acc_listener,
             self.embed_gps_listener,
+            self.display_manager,
         ]:
             if ls:
                 ls.close()
