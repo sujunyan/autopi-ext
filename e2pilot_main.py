@@ -63,6 +63,7 @@ class E2PilotAutopi:
         self.last_h11_location_time = time.time()
         self.last_embed_gps_time = time.time()
         self.last_heart_beat_time = time.time()
+        self.heart_beat_delta = 2.0
         self.last_publish_virtual_location_time = time.time()
 
         self.current_speed = -1
@@ -104,7 +105,7 @@ class E2PilotAutopi:
     def main_loop(self):
         self.loop_start()
         while True:
-            if (time.time() - self.last_heart_beat_time) > 2.0:
+            if (time.time() - self.last_heart_beat_time) > self.heart_beat_delta:
                 logger.info("Heartbeat msg..........................................")
                 logger.info(f"Current state: speed: {self.current_speed:.2f}km/h, suggest speed: {self.suggest_speed:.2f}km/h, grade: {self.grade:.2f}%, trip distance: {self.trip_distance:.3f}km, follow range: {self.follow_range:.3f}km, follow rate: {self.follow_rate*100:.2f}%, ipt: {self.route_matcher.current_pt_index}, projection dist {self.route_matcher.projection_dist:.2f}m")
                 if self.lat != None and self.lon != None:
@@ -112,7 +113,16 @@ class E2PilotAutopi:
                 self.last_heart_beat_time = time.time()
             if self.virtual_sim_mode:
                 self.publish_virtual_location()
-            time.sleep(0.1)
+
+            # Slow down and filter the heartbeat msg
+            if self.current_speed < 1.0:
+                self.heart_beat_delta = 10
+            elif self.current_speed < 5.0:
+                self.heart_beat_delta = 5
+            else:
+                self.heart_beat_delta = 2
+
+            time.sleep(0.2)
 
     def close(self):
         for ls in [
