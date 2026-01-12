@@ -185,6 +185,7 @@ def load_kargobot_data(file_path):
             "/alpas/chassis/chassis_info_rx-motion_info.front_axle_spd": "velocity",
             "/alpas/chassis/chassis_info_rx-motion_info.longitudinal_acc": "acceleration",
             "/alpas/v2x/v2x_app/v2x_others_tx-control_info.fuel_rate": "fuel_rate",
+            "/alpas/chassis/chassis_info_rx-fi_economy_info.fuel_rate_liquid": "fuel_rate",
             # velocity (front axle speed in kph)
             "/alpas/chassis/chassis_info_rx-motion_info.front_axle_spd": "front_axle_spd-kph",
             # longitudinal acceleration (m/s^2)
@@ -196,6 +197,9 @@ def load_kargobot_data(file_path):
             # engine speed
             "/alpas/chassis/chassis_info_rx-engine_info.eng_spd": "eng_spd",
             # Add more mappings as needed
+            "/cargo/localization/pose-y" : "pose-y",
+            "/cargo/localization/pose-x" : "pose-x",
+            "/cargo/localization/pose-z" : "pose-z",
         }
 
         available_map = {k: v for k, v in column_map.items() if k in df.columns}
@@ -222,7 +226,6 @@ def load_kargobot_data(file_path):
     return df
         
 
-
 def analyze_one_csv(file_path, csv_file, data_dir):
     """
     Process a single CSV file, calculate physics, and generate subplots.
@@ -231,16 +234,47 @@ def analyze_one_csv(file_path, csv_file, data_dir):
     df = load_kargobot_data(file_path)
 
     # Zoom into a specific time window (seconds since start)
-    time_min_ns = df["timestamp"].min()
-    relative_time_sec = df["timestamp"] - time_min_ns
+    time_min = df["timestamp"].min()
+    relative_time_sec = df["timestamp"] - time_min
+    df['datetime'] = pd.to_datetime(df['timestamp'], unit='s', utc=True)
+    df['datetime'] = df['datetime'].dt.tz_convert('Asia/Shanghai')
+    # print(list(df.columns))
 
     # Adjustable time window
     # start_time, end_time = 50 * 60, 75 * 60
-    start_time, end_time = 55 * 60, 60 * 60
-    mask = (relative_time_sec >= start_time) & (relative_time_sec <= end_time)
-    df = df[mask].copy()
-    x_axis = (df["timestamp"] - time_min_ns) / 60.0
-    x_label = "Time (minutes)"
+    # start_time, end_time = 40 * 60, (40+150) * 60
+
+    mask_by_time_flag = False
+    if mask_by_time_flag:
+        start_time, end_time = 45 * 60, (45+134) * 60
+        mask = (relative_time_sec >= start_time) & (relative_time_sec <= end_time)
+        df = df[mask].copy()
+    else:
+        # filter by location
+        start_x, start_y =  9355.450582, -5481.516917
+        end_x, end_y = 117352.6759, 9514.426308
+        # Compute distances to start and end
+        start_dist = np.sqrt((df["pose-x"] - start_x)**2 + (df["pose-y"] - start_y)**2)
+        end_dist = np.sqrt((df["pose-x"] - end_x)**2 + (df["pose-y"] - end_y)**2)
+
+        # Find indices of closest points
+        start_idx = start_dist.idxmin()
+        end_idx = end_dist.idxmin()
+        # Ensure correct order
+        if start_idx > end_idx:
+            start_idx, end_idx = end_idx, start_idx
+
+        # Mask the DataFrame
+        df = df.loc[start_idx:end_idx].copy()
+
+    # print pose-x and pose-y at start and end
+    print("Start Pose (x, y):", df["pose-x"].iloc[0], df["pose-y"].iloc[0])
+    print("End Pose (x, y):", df["pose-x"].iloc[-1], df["pose-y"].iloc[-1])
+
+
+    # x_axis = (df["timestamp"] - time_min) / 60.0
+    x_axis = df["datetime"]
+    x_label = "Time"
 
     # Calculate physics components if required columns exist
     required_cols = [
@@ -254,7 +288,7 @@ def analyze_one_csv(file_path, csv_file, data_dir):
         df = calculate_physics_components(df, g_vehicle_params)
 
     # Generate Subplots
-    fig, axes = plt.subplots(7, 1, figsize=(12, 18), sharex=True)
+    fig, axes = plt.subplots(8, 1, figsize=(12, 18), sharex=True)
 
     # 1. Pitch
     if "pitch-rad" in df.columns:
@@ -292,6 +326,17 @@ def analyze_one_csv(file_path, csv_file, data_dir):
         axes[6].plot(x_axis, df["force_inertial"], color="gray", label="Inertial Force")
         axes[6].set_ylabel("Inertial (N)")
         axes[6].set_xlabel(x_label)
+
+    # Add after the last force plot, before plt.tight_layout()
+    if "fuel_rate" in df.columns:
+        # Add a new subplot if needed
+        # kg/h
+        data = df["fuel_rate"] / 3600.0
+        total = data.sum() * (df["timestamp"].iloc[1] - df["timestamp"].iloc[0])
+        print(f"Total Fuel Consumed: {total:.2f} kg")
+        axes[7].plot(x_axis, data, color="green", label="Fuel Rate")
+        axes[7].set_ylabel("Fuel Rate")
+        axes[7].set_xlabel(x_label)
 
     for ax in axes:
         ax.grid(ls="--")
@@ -402,10 +447,46 @@ def run_analysis():
         return
 
     # Process each CSV
+    csv_files.sort()
     for csv_file in csv_files:
-        file_path = os.path.join(data_dir, csv_file)
-        analyze_one_csv(file_path, csv_file, data_dir)
-        break
+        pass
+        # print(csv_file)
+    idx=6
+    csv_file = [
+        "BAG_2026-01-06-08-14-53_10258-extractor.csv", #idx=0
+        "BAG_2026-01-06-09-05-54_10258-extractor.csv", #idx=1
+        "BAG_2026-01-06-10-11-18_10257-extractor.csv", #idx=2
+        "BAG_2026-01-06-10-14-08_10258-extractor.csv", #idx=3
+        "BAG_2026-01-06-14-06-05_10258-extractor.csv", #idx=4
+        "BAG_2026-01-07-07-57-27_10257-extractor.csv", #idx=5 #0107-257 ma1 34.79kg
+        "BAG_2026-01-07-08-02-33_10258-extractor.csv", #idx=6 #0107-258 ma1 35.57kg
+        "BAG_2026-01-07-13-23-06_10258-extractor.csv", #idx=7 # 0107-258 ma2, need to merge
+        "BAG_2026-01-07-16-01-10_10258-extractor.csv", #idx=8
+        "BAG_2026-01-07-16-16-43_10257-extractor.csv", #idx=9 0107-257
+        "BAG_2026-01-08-16-22-16_10258-extractor.csv", #idx=10
+        "BAG_2026-01-08-18-44-25_10258-extractor.csv", #idx=11
+        "BAG_2026-01-09-08-48-59_10151-extractor.csv", #idx=12 #0109-151 ma1, 30.92kg
+
+        # "BAG_2026-01-06-10-11-18_10257-extractor.csv", #idx=0
+        # "BAG_2026-01-09-08-48-59_10151-extractor.csv", #idx=1 
+        # "BAG_2026-01-07-07-57-27_10257-extractor.csv", #idx=2
+        # "BAG_2026-01-07-16-16-43_10257-extractor.csv", #idx=3 
+        # "BAG_2026-01-07-08-02-33_10258-extractor.csv", #idx=4 
+        # "BAG_2026-01-08-16-22-16_10258-extractor.csv", #idx=5
+        # "BAG_2026-01-07-16-01-10_10258-extractor.csv", #idx=6 
+        # "BAG_2026-01-06-08-14-53_10258-extractor.csv", #idx=7
+        # "BAG_2026-01-06-09-05-54_10258-extractor.csv", #idx=8
+        # "BAG_2026-01-06-10-14-08_10258-extractor.csv", #idx=9
+        # "BAG_2026-01-06-14-06-05_10258-extractor.csv", #idx=10
+        # "BAG_2026-01-07-13-23-06_10258-extractor.csv", #idx=11
+        # "BAG_2026-01-08-18-44-25_10258-extractor.csv", #idx=12
+    ][idx]
+    file_path = os.path.join(data_dir, csv_file)
+    analyze_one_csv(file_path, csv_file, data_dir)
+    # for csv_file in csv_files:
+    #     file_path = os.path.join(data_dir, csv_file)
+    #     analyze_one_csv(file_path, csv_file, data_dir)
+    #     break
 
     # Fit and evaluate model
     # estimate_and_test_model()
