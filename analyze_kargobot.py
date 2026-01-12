@@ -10,7 +10,7 @@ import matplotlib
 g_vehicle_params = {
     "mass_kg": 49000.0,
     "frontal_area_m2": 9.7,
-    "drag_area_m2": 0.538,
+    "drag_factor": 0.538,
     "air_density_kgm3": 1.225,
     "rolling_resistance_factor": 0.004,
     "max_torque_nm": 2500.0,
@@ -25,12 +25,13 @@ def nonlinear_model(X, p1, p2, p3, p4, p5):
     acc = X[:, 0]
     v = X[:, 1]
     theta = X[:, 2]
-    # theta = theta - p5 * acc  # Adjust pitch if needed
+    theta = theta - p5 * acc  # Adjust pitch if needed
     # offset = X[:, 3]
 
     # Unpack vehicle parameters
     m = g_vehicle_params["mass_kg"]
-    drag_area = g_vehicle_params["drag_area_m2"]
+    drag_factor = g_vehicle_params["drag_factor"]
+    drag_area = g_vehicle_params["frontal_area_m2"]
     air_density = g_vehicle_params["air_density_kgm3"]
     mu = g_vehicle_params["rolling_resistance_factor"]
     g =  g_vehicle_params["gravity_ms2"]
@@ -40,13 +41,13 @@ def nonlinear_model(X, p1, p2, p3, p4, p5):
 
     # Calculate individual forces (N)
     H = 1.2
-    force_aero = 0.5 * (1-H*0.085) * air_density * drag_area * (v ** 2)
+    force_aero = 0.5 * (1-H*0.085) * air_density * drag_factor * drag_area * (v ** 2)
     force_roll = mu * m * g * np.cos(theta)
     force_grav = m * g * np.sin(theta)
     force_inertial = m * acc
 
     p_hat = p1 * force_aero * v + p2 * force_roll * v + p3 * force_grav * v + p4 * force_inertial * v
-    p_hat = p1 * force_aero * v + p2 * force_roll * v + p3 * force_grav * v + p4 * force_inertial * v
+    # p_hat = p1 * force_aero * v + p2 * force_roll * v + p3 * force_grav * v + p4 * force_inertial * v
 
     return np.maximum(0, p_hat)
 
@@ -58,7 +59,7 @@ def calculate_physics_components(df, vehicle_params):
     # Base physical variables
     v = df["front_axle_spd-kph"] / 3.6  # velocity in m/s
     a = df["longitudinal_acc-m/s2"]  # acceleration in m/s2
-    ts = df["timestamp-ns"]
+    ts = df["timestamp"]
     acc = np.gradient(v, ts)  # Numerical differentiation
     theta = df["pitch-rad"]  # pitch in rad
     trq_pct = df["act_eng_percent_trq-0~100"]
@@ -66,7 +67,8 @@ def calculate_physics_components(df, vehicle_params):
 
     # Unpack vehicle parameters
     m = vehicle_params["mass_kg"]
-    drag_area = vehicle_params["drag_area_m2"]
+    drag_factor = vehicle_params["drag_factor"]
+    drag_area = vehicle_params["frontal_area_m2"]
     air_density = vehicle_params["air_density_kgm3"]
     mu = vehicle_params["rolling_resistance_factor"]
     g = vehicle_params["gravity_ms2"]
@@ -75,7 +77,12 @@ def calculate_physics_components(df, vehicle_params):
     # Calculate coefficients
 
     # Calculate individual forces (N)
-    df["force_aero"] = 0.5 * air_density * drag_area * (v ** 2)
+    df["force_aero"] = 0.5 * air_density * drag_factor * drag_area * v * v
+    # print(df["force_aero"].head())
+    # print(v.head())
+    # print(drag_factor)
+    # print(air_density)
+    # print((v*v).head())
     df["force_roll"] = mu * m * g * np.cos(theta)
     df["force_grav"] = m * g * np.sin(theta)
     df["force_inertial"] = m * acc
@@ -165,106 +172,137 @@ def prepare_model_data(df, vehicle_params):
     return X, y
 
 
+def load_kargobot_data(file_path):
+    # Check if the file is from the new enxin dataset
+    df = pd.read_csv(file_path)
+
+    if "enxin" in file_path:
+        # Read CSV, skip empty columns
+        df = df.loc[:, ~df.columns.str.match('Unnamed')]  # Remove unnamed columns
+        # Map new headers to standard variable names
+        column_map = {
+            "timestamp": "timestamp",
+            "/alpas/chassis/chassis_info_rx-motion_info.front_axle_spd": "velocity",
+            "/alpas/chassis/chassis_info_rx-motion_info.longitudinal_acc": "acceleration",
+            "/alpas/v2x/v2x_app/v2x_others_tx-control_info.fuel_rate": "fuel_rate",
+            # velocity (front axle speed in kph)
+            "/alpas/chassis/chassis_info_rx-motion_info.front_axle_spd": "front_axle_spd-kph",
+            # longitudinal acceleration (m/s^2)
+            "/alpas/chassis/chassis_info_rx-motion_info.longitudinal_acc": "longitudinal_acc-m/s2",
+            # pitch (radian)
+            "/cargo/localization/pose-pitch": "pitch-rad",
+            # actual engine percent torque (0~100)
+            "/alpas/chassis/chassis_info_rx-engine_info.act_eng_percent_trq": "act_eng_percent_trq-0~100",
+            # engine speed
+            "/alpas/chassis/chassis_info_rx-engine_info.eng_spd": "eng_spd",
+            # Add more mappings as needed
+        }
+
+        available_map = {k: v for k, v in column_map.items() if k in df.columns}
+        df = df.rename(columns=available_map)
+    else:
+        column_map = {
+            "timestamp-ns": "timestamp",
+            # Add more mappings as needed
+            "front_axle_spd-kph" : "front_axle_spd-kph",
+            "longitudinal_acc-m/s2" : "longitudinal_acc-m/s2",
+            "pitch-rad" : "pitch-rad",
+            "act_eng_percent_trq-0~100" : "act_eng_percent_trq-0~100",
+            "eng_spd" : "eng_spd",
+        }
+
+        available_map = {k: v for k, v in column_map.items() if k in df.columns}
+        df = df.rename(columns=available_map)
+
+        # Handle duplicate timestamps with uniform interpolation
+        counts = df.groupby("timestamp")["timestamp"].transform("count")
+        cumcounts = df.groupby("timestamp").cumcount()
+        df["timestamp"] = df["timestamp"] + cumcounts / counts
+
+    return df
+        
+
+
 def analyze_one_csv(file_path, csv_file, data_dir):
     """
     Process a single CSV file, calculate physics, and generate subplots.
     """
-    print(f"Reading and analyzing {csv_file}...")
-    try:
-        df = pd.read_csv(file_path)
 
-        if "timestamp-ns" in df.columns:
-            # Handle duplicate timestamps with uniform interpolation
-            counts = df.groupby("timestamp-ns")["timestamp-ns"].transform("count")
-            cumcounts = df.groupby("timestamp-ns").cumcount()
-            df["timestamp-ns"] = df["timestamp-ns"] + cumcounts / counts
+    df = load_kargobot_data(file_path)
 
-            # Zoom into a specific time window (seconds since start)
-            time_min_ns = df["timestamp-ns"].min()
-            relative_time_sec = df["timestamp-ns"] - time_min_ns
+    # Zoom into a specific time window (seconds since start)
+    time_min_ns = df["timestamp"].min()
+    relative_time_sec = df["timestamp"] - time_min_ns
 
-            # Adjustable time window
-            # start_time, end_time = 50 * 60, 75 * 60
-            start_time, end_time = 55 * 60, 60 * 60
-            mask = (relative_time_sec >= start_time) & (relative_time_sec <= end_time)
-            df = df[mask].copy()
+    # Adjustable time window
+    # start_time, end_time = 50 * 60, 75 * 60
+    start_time, end_time = 55 * 60, 60 * 60
+    mask = (relative_time_sec >= start_time) & (relative_time_sec <= end_time)
+    df = df[mask].copy()
+    x_axis = (df["timestamp"] - time_min_ns) / 60.0
+    x_label = "Time (minutes)"
 
-            if df.empty:
-                print(f"Warning: No data in specified time range for {csv_file}")
-                return
+    # Calculate physics components if required columns exist
+    required_cols = [
+        "front_axle_spd-kph",
+        "longitudinal_acc-m/s2",
+        "pitch-rad",
+        "act_eng_percent_trq-0~100",
+        "eng_spd",
+    ]
+    if all(col in df.columns for col in required_cols):
+        df = calculate_physics_components(df, g_vehicle_params)
 
-            x_axis = (df["timestamp-ns"] - time_min_ns) / 60.0
-            x_label = "Time (minutes)"
-        else:
-            # Fallback for data without timestamps
-            start_idx, end_idx = 40000, 50000
-            df = df.iloc[start_idx:end_idx].copy()
-            x_axis = np.arange(len(df))
-            x_label = "Sample Index"
+    # Generate Subplots
+    fig, axes = plt.subplots(7, 1, figsize=(12, 18), sharex=True)
 
-        # Calculate physics components if required columns exist
-        required_cols = [
-            "front_axle_spd-kph",
-            "longitudinal_acc-m/s2",
-            "pitch-rad",
-            "act_eng_percent_trq-0~100",
-            "eng_spd",
-        ]
-        if all(col in df.columns for col in required_cols):
-            df = calculate_physics_components(df, g_vehicle_params)
+    # 1. Pitch
+    if "pitch-rad" in df.columns:
+        axes[0].plot(x_axis, df["pitch-rad"] * 180 / math.pi, color="blue", label="Pitch")
+        axes[0].set_ylabel("Pitch (deg)")
+        axes[0].set_title(f"Data Analysis - {csv_file}")
 
-        # Generate Subplots
-        fig, axes = plt.subplots(7, 1, figsize=(12, 18), sharex=True)
+    # 2. Speed
+    if "front_axle_spd-kph" in df.columns:
+        axes[1].plot(x_axis, df["front_axle_spd-kph"], color="green", label="Speed")
+        axes[1].set_ylabel("Speed (kph)")
 
-        # 1. Pitch
-        if "pitch-rad" in df.columns:
-            axes[0].plot(x_axis, df["pitch-rad"] * 180 / math.pi, color="blue", label="Pitch")
-            axes[0].set_ylabel("Pitch (deg)")
-            axes[0].set_title(f"Data Analysis - {csv_file}")
+    # 3. Engine Power
+    if "power_engine" in df.columns:
+        axes[2].plot(x_axis, df["power_engine"] / 1000.0, color="red", label="Engine Power")
+        axes[2].set_ylabel("Power (kW)")
 
-        # 2. Speed
-        if "front_axle_spd-kph" in df.columns:
-            axes[1].plot(x_axis, df["front_axle_spd-kph"], color="green", label="Speed")
-            axes[1].set_ylabel("Speed (kph)")
+    # 4. Aero Drag Force
+    if "force_aero" in df.columns:
+        axes[3].plot(x_axis, df["force_aero"], color="orange", label="Aero Drag")
+        axes[3].set_ylabel("Aero Drag (N)")
 
-        # 3. Engine Power
-        if "power_engine" in df.columns:
-            axes[2].plot(x_axis, df["power_engine"] / 1000.0, color="red", label="Engine Power")
-            axes[2].set_ylabel("Power (kW)")
+    # 5. Gravitational Force
+    if "force_grav" in df.columns:
+        axes[4].plot(x_axis, df["force_grav"], color="purple", label="Grav Force")
+        axes[4].set_ylabel("Grav Force (N)")
 
-        # 4. Aero Drag Force
-        if "force_aero" in df.columns:
-            axes[3].plot(x_axis, df["force_aero"], color="orange", label="Aero Drag")
-            axes[3].set_ylabel("Aero Drag (N)")
+    # 6. Rolling Resistance Force
+    if "force_roll" in df.columns:
+        axes[5].plot(x_axis, df["force_roll"], color="brown", label="Roll Res")
+        axes[5].set_ylabel("Roll Res (N)")
 
-        # 5. Gravitational Force
-        if "force_grav" in df.columns:
-            axes[4].plot(x_axis, df["force_grav"], color="purple", label="Grav Force")
-            axes[4].set_ylabel("Grav Force (N)")
+    # 7. Inertial Force
+    if "force_inertial" in df.columns:
+        axes[6].plot(x_axis, df["force_inertial"], color="gray", label="Inertial Force")
+        axes[6].set_ylabel("Inertial (N)")
+        axes[6].set_xlabel(x_label)
 
-        # 6. Rolling Resistance Force
-        if "force_roll" in df.columns:
-            axes[5].plot(x_axis, df["force_roll"], color="brown", label="Roll Res")
-            axes[5].set_ylabel("Roll Res (N)")
+    for ax in axes:
+        ax.grid(ls="--")
+        ax.legend(loc="upper right")
 
-        # 7. Inertial Force
-        if "force_inertial" in df.columns:
-            axes[6].plot(x_axis, df["force_inertial"], color="gray", label="Inertial Force")
-            axes[6].set_ylabel("Inertial (N)")
-            axes[6].set_xlabel(x_label)
+    plt.tight_layout()
+    output_plot = os.path.join(data_dir, "figs", f"{os.path.splitext(csv_file)[0]}_analysis.png")
+    fig.savefig(output_plot)
+    plt.close(fig)
+    print(f"Saved analysis plot to {output_plot}")
 
-        for ax in axes:
-            ax.grid(ls="--")
-            ax.legend(loc="upper right")
-
-        plt.tight_layout()
-        output_plot = os.path.join(data_dir, f"{os.path.splitext(csv_file)[0]}_analysis.png")
-        fig.savefig(output_plot)
-        plt.close(fig)
-        print(f"Saved analysis plot to {output_plot}")
-
-    except Exception as e:
-        print(f"Error processing {csv_file}: {e}")
 
 
 def estimate_and_test_model():
@@ -351,7 +389,8 @@ def run_analysis():
     Main entry point for data analysis and model estimation.
     """
     data_dir = os.path.dirname(os.path.abspath(__file__))
-    data_dir = os.path.join(data_dir, "data", "kargobot")
+    # data_dir = os.path.join(data_dir, "data", "kargobot")
+    data_dir = os.path.join(data_dir, "data", "kargobot", "enxin")
     csv_files = [f for f in os.listdir(data_dir) if f.endswith(".csv")]
     matplotlib.use("Agg")  # Use non-interactive backend
     matplotlib.rc("font", family='Songti SC')
@@ -366,9 +405,10 @@ def run_analysis():
     for csv_file in csv_files:
         file_path = os.path.join(data_dir, csv_file)
         analyze_one_csv(file_path, csv_file, data_dir)
+        break
 
     # Fit and evaluate model
-    estimate_and_test_model()
+    # estimate_and_test_model()
 
 
 if __name__ == "__main__":
