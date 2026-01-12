@@ -181,7 +181,9 @@ class DisplayManager:
 
     
     def close(self):
+        logger.info("[display manager] Closing...")
         self.reset_display()
         time.sleep(0.2)
         if self.ser is not None and self.ser.is_open:
             self.ser.close()
+        logger.info("[display manager] Closed.")

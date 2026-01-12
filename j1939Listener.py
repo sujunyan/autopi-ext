@@ -220,6 +220,39 @@ class J1939Listener(Listener):
             logger.exception(f"Unexpected error setting up CAN interface: {e}")
             return False
 
+    def send_heartbeat(self):
+        """
+        The heart heat message of UDS.
+
+        This is hacked from the purchased OBD device.
+
+        Hopefully, this will be useful in OBD listening...
+        """
+        data = [
+            0x02,
+            0x3E,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+        ]
+        priority=6
+        destination=0x00
+        data_page = 0x00
+
+
+        UDS_PGN = 0xDA
+        self.ca.send_pgn(
+            data_page,
+            UDS_PGN,
+            destination & 0xFF,
+            priority,
+            data,
+        )
+        return True
+
     def request_pgn(self, pgn, data_page=0, destination=0x00, priority=6):
         if not self.ca or self.ca.state != j1939.ControllerApplication.State.NORMAL:
             return True
@@ -247,18 +280,19 @@ class J1939Listener(Listener):
 
 if __name__ == "__main__":
     config_logger(logging.DEBUG)
-    ls = J1939Listener(can_channel="can0", can_rate=1000_000)
+    ls = J1939Listener(can_channel="can0", can_rate=250_000)
     ls.setup()
     time.sleep(5)
     priority = 6
     des = 0x00
     logger.debug("sending requests")
     # ls.scan_pgns()
-    for des in range(0, 256):
-        logger.debug(f"sending reuqests to des {des}")
-        ls.request_pgn(65144, 0, des, priority)
-        time.sleep(0.5)
+    ls.send_heartbeat()
+    # for des in range(0, 256):
+    #     logger.debug(f"sending reuqests to des {des}")
+    #     ls.request_pgn(65144, 0, des, priority)
+    #     time.sleep(0.5)
     
-    time.sleep(5)
+    time.sleep(1000)
     ls.close() 
     time.sleep(1)

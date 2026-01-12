@@ -27,7 +27,7 @@ logging.getLogger("can").setLevel(logging.DEBUG)
 
 USE_1939 = True
 # Use location simulation mode
-VIRTUAL_SIMULATION_MODE = True
+VIRTUAL_SIMULATION_MODE = False
 
 class E2PilotAutopi:
     def __init__(self):
@@ -120,7 +120,6 @@ class E2PilotAutopi:
             self.h11_listener,
             self.embed_acc_listener,
             self.embed_gps_listener,
-            self.display_manager,
         ]:
             if ls:
                 ls.close()
@@ -134,6 +133,8 @@ class E2PilotAutopi:
             if client:
                 client.loop_stop()
                 client.disconnect()
+
+        self.display_manager.close()
 
     def is_h11_alive(self):
         if self.h11_listener.enable == False:
@@ -261,8 +262,9 @@ class E2PilotAutopi:
         else:
             if msg.topic == "h11gps/position":
                 self.last_h11_location_time = time.time()
-                self.lat = data["lat"]
-                self.lon = data["lon"]
+                if data["lat"] != 0 and data["lon"] != 0:
+                    self.lat = data["lat"]
+                    self.lon = data["lon"]
             elif msg.topic == "track/pos":
                 self.last_embed_gps_time = time.time()
                 if not self.is_h11_alive():

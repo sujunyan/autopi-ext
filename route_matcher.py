@@ -40,7 +40,13 @@ route_name_subset = [
     # "test.2026-01-08_merged_gps_ma1.opt.JuMP.route.v1.json",
     # "test.2026-01-08_merged_gps_ma2.opt.JuMP.route.v1.json",
     # "test.2026-01-09_merged_gps_ma1.opt.JuMP.route.v2.json",
-    "test.2026-01-09_merged_gps_ma2.opt.JuMP.route.v2.json"
+    # "test.2026-01-09_merged_gps_ma2.opt.JuMP.route.v2.json",
+    # "test.2026-01-10_merged_gps_ma1_41000.0kg.opt.JuMP.route.json", # max_spd = 85kmh
+    # "test.2026-01-10_merged_gps_ma2_41000.0kg.opt.JuMP.route.json", # WRONG max speed limit, mixed highway and urban
+    # "test.2026-01-10_merged_gps_ma1_49000.0kg.opt.JuMP.route.json", # max_spd = 85kmh
+    # "test.2026-01-10_merged_gps_ma2_49000.0kg.opt.JuMP.route.json", # WRONG max speed limit
+    # "test.2026-01-11_merged_gps_ma1_41000.0kg.opt.JuMP.route.json", # max_spd = 82kmh
+    "test.2026-01-11_merged_gps_ma2_41000.0kg.opt.JuMP.route.json", # max_spd = 82kmh
 ]
 
 
