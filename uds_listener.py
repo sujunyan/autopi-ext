@@ -2,28 +2,130 @@
 This script is for UDS, cargobot X5000
 """
 
-import can
-import isotp
-import udsoncan
-import time
-from udsoncan.connections import PythonIsoTpConnection
-from udsoncan.client import Client
-from udsoncan import configs
-import logging
+import can, isotp, usdoncan
 from logger import config_logger
-import subprocess
+import subprocess, csv, time, logging
 
-## From the example
-import udsoncan
-import isotp
 from udsoncan.connections import IsoTPSocketConnection
 from udsoncan.client import Client
 from udsoncan.exceptions import *
 from udsoncan.services import *
 import udsoncan.configs
+
 import struct
+import utils
+from listener import Listener
 
 config_logger(logging.DEBUG)
+
+logger = logging.getLogger("e2pilot_autopi")
+
+"""
+The class for listening to the OBD with the UDS protocol
+"""
+class UdsListener(Listener):
+    def __init__(self, 
+        mqtt_broker="localhost",
+        can_cannel="can0",
+        bustype="socketcan",
+        can_rate=500000,
+        ):
+        super().__init__(name="UDS", mqtt_broker=mqtt_broker)
+        self.mqtt_topic = "uds/"
+
+        self.bustype = bustype
+        self.can_rate = can_rate
+        self.can_channel = can_channel
+
+        # Override log file to CSV for J1939
+        ts = datetime.now().strftime("%Y%m%d_%H%M")
+        self.log_file = self.data_dir.joinpath(f"{ts}_uds_raw_data.csv")
+
+
+    def setup_uds(self):
+        self.data_identifiers =  {
+           # 'default' : '>H',
+           0x0102 : EngineCodec,
+           0x013F : FuelCodec,
+           0x0173 : FuelLevelCodec
+        }
+        self.uds_config = dict(udsoncan.configs.default_client_config)
+        self.uds_config['data_identifiers'] = self.data_identifiers
+
+        self.isotp_address_mode =  isotp.AddressingMode.Normal_29bits 
+        self.txid = 0x18DA00F1
+        self.rxid = 0x18DAF100
+
+        # self.bus = can.interface.Bus(channel=self.can_cannel, bustype=self.bustype)
+
+        self.connection = IsoTPSocketConnection(self.can_cannel, self.isotp_address_mode, rxid=self.rxid, txid=self.txid)
+
+        self.uds_client = udsoncan.Client(self.connection, config=self.uds_config)
+
+    def setup(self):
+        if not self.setup_can_interface():
+            self.enable = False
+            return
+
+        try:
+            self.setup_mqtt()
+            self.set_uds()
+            self.enable = True
+            logger.info("UdsListener setup complete.")
+        except Exception as e:
+            logger.error(f"UdsListener setup error: {e}")
+            self.enable = False
+
+    def save_raw_data_csv(self, d, ts):
+        file_exists = self.log_file.exists()
+        keys = list(d.keys())
+        keys.sort()
+        with open(self.log_file, mode="a", newline="") as fd:
+            writer = csv.writer(fd)
+            if not file_exists:
+                headers = ["Timestamp"]
+                headers.extend(keys)
+                writer.writerow(headers)
+            row = [ts]
+            row.extend([d[k] for k in keys])
+            writer.writerow(row)
+
+    def loop_once(self):
+        if not self.enable:
+            return
+
+        try:
+            # print(response.service_data.values[0x0102].hex())
+            self.uds_client.tester_present()
+            # engine information
+            d = dict()
+            for data_id in self.data_identifiers.keys():
+                response = self.uds_client.read_data_by_identifier(data_id)
+                d.update(response.service_data.values[data_id])
+            
+            ts = time.time()
+            self.save_raw_data_csv(d, ts)
+
+
+            for key in ["veh_spd"]:
+                if key in d.keys():
+                    topic = f"{self.mqtt_topic}{key}"
+                    payload = {
+                        "timestamp": ds,
+                        key: d[key],
+                    }
+                    self.publish_mqtt(topic, payload)
+                    # logger.debug(f"Published {topic}: {payload}")
+
+            time.sleep(0.2)
+        except Exception as e:
+            logger.error(f"loop once in UDS failed: {e}")
+            time.sleep(1)
+
+    def close(self):
+        self.uds_client.close()
+        self.connection.close()
+        super().close()
 
 # 0x013F
 class FuelCodec(udsoncan.DidCodec):
@@ -34,7 +136,7 @@ class FuelCodec(udsoncan.DidCodec):
         s = " ".join(f"{b:02X}" for b in payload)
         fuel_rate = struct.unpack('>H', payload)[0] * 0.05
         # logger.info(f"Got data {s} len={len(payload)} fuel_rate={fuel_rate}")
-        logger.info(f"fuel_rate={fuel_rate}")
+        logger.debug(f"fuel_rate={fuel_rate}")
         d = {
             'fuel_rate' : fuel_rate # unit kg/L
         }
@@ -52,7 +154,7 @@ class FuelLevelCodec(udsoncan.DidCodec):
         s = " ".join(f"{b:02X}" for b in payload)
         fuel_level = payload[11] * 0.4
         # logger.info(f"Got data {s} len={len(payload)} fuel_level={fuel_level}")
-        logger.info(f"fuel_level={fuel_level}")
+        logger.debug(f"fuel_level={fuel_level}")
         d = {
             "fuel_level" : fuel_level # unit: %
         }
@@ -60,7 +162,6 @@ class FuelLevelCodec(udsoncan.DidCodec):
 
     def __len__(self):
         return 20    
-
 
 # 0x0102
 class EngineCodec(udsoncan.DidCodec):
@@ -75,111 +176,51 @@ class EngineCodec(udsoncan.DidCodec):
         torque_perc = payload[38] - 125.0
         veh_spd = struct.unpack('>H', payload[23:25])[0] * 0.00390625
         # logger.info(f"Got data {s} len={len(payload)} rpm={rpm_candidate}, torque_perc={torque_perc}, veh_spd={veh_spd}")
-        logger.info(f"rpm={rpm_candidate}, torque_perc={torque_perc}, veh_spd={veh_spd}")
+        logger.debug(f"rpm={rpm_candidate}, torque_perc={torque_perc}, veh_spd={veh_spd}")
         
         d = {
             "rpm" : rpm_candidate,
             "torque" : torque_perc,
+            "veh_spd" : veh_spd,
         }
         return d
 
    def __len__(self):
         return 40    # encoded payload is 8 byte long.
 
-def setup_can_interface():
-    # can_channel = self.can_channel
-    # can_rate = 250000
-    # can_rate = self.can_rate 
-    can_channel = "can0"
-    can_rate = 500000
-    cmd = f"sudo ip link set {can_channel} down && sudo ip link set {can_channel} up type can bitrate {can_rate} sample-point 0.8"
-    try:
-        logger.info("Setting up CAN interface...")
-        result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
-        if result.returncode == 0:
-            logger.info("CAN interface setup successfully.")
-            return True
-        else:
-            logger.error(f"Failed to set up CAN interface: {result.stderr}")
-            return False
-    except Exception as e:
-        logger.exception(f"Unexpected error setting up CAN interface: {e}")
-        return False
 
-logger = logging.getLogger("e2pilot_autopi")
-setup_can_interface()
+if __name__ == "__main__":
+    config_logger(logging.DEBUG)
+    ls = UdsListener(can_cannel="can0", can_rate=500_000)
+    ls.setup()
+    ls.loop_start()
 
-config = dict(udsoncan.configs.default_client_config)
-config['data_identifiers'] = {
-   'default' : '>H',
-   0x0102 : EngineCodec,
-   0x013F : FuelCodec,
-   0x0173 : FuelLevelCodec
-}
+    time.sleep(100)
+    ls.close()
+    pass
 
-
-
-# 1. 配置 ISO-TP 传输层 (针对 Woodward OH6.0)
-# txid: 诊断仪发送 ID, rxid: ECU 回复 ID
-isotp_params = {
-    'txid': 0x18DA00F1,
-    'rxid': 0x18DAF100,
-    'addressing_mode': isotp.AddressingMode.Normal_29bits,
-}
-# 2. 建立 CAN 总线连接 (此处以 Linux SocketCAN 为例)
-bus = can.interface.Bus(channel='can0', bustype='socketcan')
-# 3. 封装 ISO-TP 层
-# socket = isotp.socket()
-# socket.bind(bus, address=isotp.Address(isotp_params['addressing_mode'], rxid=isotp_params['rxid'], txid=isotp_params['txid']))
-# connection = PythonIsoTpConnection(socket)
-
-connection = IsoTPSocketConnection('can0', isotp.Address(isotp.AddressingMode.Normal_29bits, rxid=isotp_params['rxid'], txid=isotp_params['txid']))
-# 4. 定义数据解析逻辑 (DID 对应关系)
-# 注意：以下 DID 为 Woodward 常用或 OBD 标准 DID，具体需参考你的 DBC/协议文档
-
-# 5. 主程序循环
-with Client(connection, config=config) as client:
-    print("开始轮询车辆数据... 按 Ctrl+C 停止")
-    
-    while True:
-        try:
-            # --- 维持心跳 (Tester Present) ---
-            # 某些 ECU 需要持续收到这个才允许频繁请求
-            client.tester_present()
-
-            # engine information
-            response = client.read_data_by_identifier(0x0102)
-
-            # Fuel rate information
-            response = client.read_data_by_identifier(0x013F)
-
-            # Fuel Level info
-            response = client.read_data_by_identifier(0x0173)
-
-            # print(response.service_data.values[0x0102].hex())
-            # print(response.service_data.values[0x0102])
-            # request = bytearray([0x03, 0x22, 0x01, 0x02])
-            # connection.send(request)
-            # payload = connection.wait_frame(timeout=1)
-            # s = " ".join(f"{b:02X}" for b in payload)
-            # logger.info(f"Got frame {s}")
-            # --- 读取引擎转速 ---
-            # response = client.read_data_by_identifier(DIDS['ENGINE_SPEED'])
-            # if response.positive:
-            #     rpm = parse_engine_speed(response.service_data.raw_payload)
-            #     print(f"转速: {rpm:>7} RPM", end=' | ')
-            
-            # --- 读取车辆速度 ---
-            # response = client.read_data_by_identifier(DIDS['VEHICLE_SPEED'])
-            # if response.positive:
-            #     logger.info(f"Got positive response {response.service_data.raw_payload}")
-                # speed = parse_vehicle_speed(response.service_data.raw_payload)
-                # logger.info(f"车速: {speed:>3} km/h", end=' | ')
-            # --- 读取燃料消耗 ---
-            # response = client.read_data_by_identifier(DIDS['FUEL_RATE'])
-            # ... 解析逻辑 ...
-            # print("") # 换行
-            time.sleep(1.0)  # 10Hz 轮询频率，自动驾驶建议不要低于 20Hz
-        except Exception as e:
-            print(f"读取失败: {e}")
-            time.sleep(1)
+# with Client(connection, config=config) as client:
+#     print("开始轮询车辆数据... 按 Ctrl+C 停止")
+#     
+#     while True:
+#         try:
+#             # --- 维持心跳 (Tester Present) ---
+#             # 某些 ECU 需要持续收到这个才允许频繁请求
+#             client.tester_present()
+# 
+#             # engine information
+#             response = client.read_data_by_identifier(0x0102)
+# 
+#             # Fuel rate information
+#             response = client.read_data_by_identifier(0x013F)
+# 
+#             # Fuel Level info
+#             response = client.read_data_by_identifier(0x0173)
+# 
+#             # print(response.service_data.values[0x0102].hex())
+#             # print(response.service_data.values[0x0102])
+#             # logger.info(f"Got frame {s}")
+#             time.sleep(1.0)  # 10Hz 轮询频率，自动驾驶建议不要低于 20Hz
+#         except Exception as e:
+#             print(f"读取失败: {e}")
+#             time.sleep(1)

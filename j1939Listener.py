@@ -12,6 +12,7 @@ from logger import config_logger
 import j1939
 from j1939Parser import J1939Parser
 from listener import Listener
+import utils
 
 logger = logging.getLogger("e2pilot_autopi")
 
@@ -206,52 +207,21 @@ class J1939Listener(Listener):
         can_channel = self.can_channel
         # can_rate = 250000
         can_rate = self.can_rate 
-        cmd = f"sudo ip link set {can_channel} down && sudo ip link set {can_channel} up type can bitrate {can_rate} sample-point 0.8"
-        try:
-            logger.info("Setting up CAN interface...")
-            result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
-            if result.returncode == 0:
-                logger.info("CAN interface setup successfully.")
-                return True
-            else:
-                logger.error(f"Failed to set up CAN interface: {result.stderr}")
-                return False
-        except Exception as e:
-            logger.exception(f"Unexpected error setting up CAN interface: {e}")
-            return False
+        utils.setup_can_interface(can_channel, can_rate)
+        # cmd = f"sudo ip link set {can_channel} down && sudo ip link set {can_channel} up type can bitrate {can_rate} sample-point 0.8"
+        # try:
+        #     logger.info("setting up can interface...")
+        #     result = subprocess.run(cmd, shell=true, capture_output=true, text=true)
+        #     if result.returncode == 0:
+        #         logger.info("can interface setup successfully.")
+        #         return true
+        #     else:
+        #         logger.error(f"failed to set up can interface: {result.stderr}")
+        #         return false
+        # except exception as e:
+        #     logger.exception(f"unexpected error setting up can interface: {e}")
+        #     return false
 
-    def send_heartbeat(self):
-        """
-        The heart heat message of UDS.
-
-        This is hacked from the purchased OBD device.
-
-        Hopefully, this will be useful in OBD listening...
-        """
-        data = [
-            0x02,
-            0x3E,
-            0x00,
-            0x00,
-            0x00,
-            0x00,
-            0x00,
-            0x00,
-        ]
-        priority=6
-        destination=0x00
-        data_page = 0x00
-
-
-        UDS_PGN = 0xDA
-        self.ca.send_pgn(
-            data_page,
-            UDS_PGN,
-            destination & 0xFF,
-            priority,
-            data,
-        )
-        return True
 
     def request_pgn(self, pgn, data_page=0, destination=0x00, priority=6):
         if not self.ca or self.ca.state != j1939.ControllerApplication.State.NORMAL:
@@ -287,7 +257,7 @@ if __name__ == "__main__":
     des = 0x00
     logger.debug("sending requests")
     # ls.scan_pgns()
-    ls.send_heartbeat()
+    # ls.send_heartbeat()
     # for des in range(0, 256):
     #     logger.debug(f"sending reuqests to des {des}")
     #     ls.request_pgn(65144, 0, des, priority)

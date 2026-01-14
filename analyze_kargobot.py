@@ -517,10 +517,11 @@ def run_analysis():
 
         "BAG_2026-01-11-09-03-13_10152-extractor.csv", #idx=13 #0111-152 ma1 33.39kg, 104.64min
         "BAG_2026-01-11-15-17-52_10152-extractor.csv", #idx=14 #0111-152 ma2 32.16kg, 111.19min
+        ## The above is recorded
 
     ]
     # print(csv_files1)
-    csv_files1 = [csv_files_all[i] for i in [14]]
+    csv_files1 = [csv_files_all[i] for i in [7,8]]
     # file_path = os.path.join(data_dir, csv_file)
     cut_flag = ["full", "ma1", "ma2"][0]
     analyze_one_csv(data_dir, csv_files1, cut_flag=cut_flag)
