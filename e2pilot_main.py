@@ -27,7 +27,7 @@ logging.getLogger("can").setLevel(logging.DEBUG)
 
 USE_1939 = True
 # Use location simulation mode
-VIRTUAL_SIMULATION_MODE = False
+VIRTUAL_SIMULATION_MODE = True
 
 class E2PilotAutopi:
     def __init__(self):
@@ -63,7 +63,7 @@ class E2PilotAutopi:
         self.last_h11_location_time = time.time()
         self.last_embed_gps_time = time.time()
         self.last_heart_beat_time = time.time()
-        self.heart_beat_delta = 2.0
+        self.heart_beat_delta = 1.0
         self.last_publish_virtual_location_time = time.time()
 
         self.current_speed = -1
@@ -115,14 +115,15 @@ class E2PilotAutopi:
                 self.publish_virtual_location()
 
             # Slow down and filter the heartbeat msg
-            if self.current_speed < 1.0:
-                self.heart_beat_delta = 10
-            elif self.current_speed < 5.0:
-                self.heart_beat_delta = 5
-            else:
-                self.heart_beat_delta = 2
+            if not self.virtual_sim_mode:
+                if self.current_speed < 1.0:
+                    self.heart_beat_delta = 10
+                elif self.current_speed < 5.0:
+                    self.heart_beat_delta = 5
+                else:
+                    self.heart_beat_delta = 2
 
-            time.sleep(0.2)
+            time.sleep(0.1)
 
     def close(self):
         for ls in [
@@ -357,6 +358,10 @@ class E2PilotAutopi:
         next_lat = self.lat + (lat2 - lat1) * increment
         next_lon = self.lon + (lon2 - lon1) * increment
         delta_dis = haversine(self.lat, self.lon, next_lat, next_lon)
+        if delta_dis < 1e-6:
+            logger.warning("Got duplicate point, force moving forward")
+            self.route_matcher.current_pt_index += 1
+            return
         logger.debug(f"Update delta_dis: {delta_dis:.3f}, latlon: ({self.lat:.8f}, {self.lon:.8f}), next latlon {next_lat:.8f}, {next_lon:.8f}")
         self.lat = next_lat
         self.lon = next_lon
@@ -379,7 +384,11 @@ class E2PilotAutopi:
 
 
 def main():
-    config_logger(logging.INFO)
+    if VIRTUAL_SIMULATION_MODE:
+        config_logger(logging.INFO)
+    else:
+        config_logger(logging.INFO)
+
 
     logger.info("-----------------------------------------------")
     logger.info("-----------------------------------------------")

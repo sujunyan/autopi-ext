@@ -46,7 +46,16 @@ route_name_subset = [
     # "test.2026-01-10_merged_gps_ma1_49000.0kg.opt.JuMP.route.json", # max_spd = 85kmh
     # "test.2026-01-10_merged_gps_ma2_49000.0kg.opt.JuMP.route.json", # WRONG max speed limit
     # "test.2026-01-11_merged_gps_ma1_41000.0kg.opt.JuMP.route.json", # max_spd = 82kmh
-    "test.2026-01-11_merged_gps_ma2_41000.0kg.opt.JuMP.route.json", # max_spd = 82kmh
+    # "test.2026-01-11_merged_gps_ma2_41000.0kg.opt.JuMP.route.json", # max_spd = 82kmh
+
+
+    ## Below all have max_spd = 85kmh
+    # "test.2026-01-12_merged_gps_ma1_41000.0kg_70kmh.opt.JuMP.route.json",
+    "test.2026-01-12_merged_gps_ma1_41000.0kg_75kmh.opt.JuMP.route.json", # default ma1
+    # "test.2026-01-12_merged_gps_ma1_41000.0kg_80kmh.opt.JuMP.route.json",
+    # "test.2026-01-12_merged_gps_ma2_41000.0kg_70kmh.opt.JuMP.route.json",
+    # "test.2026-01-12_merged_gps_ma2_41000.0kg_75kmh.opt.JuMP.route.json", # default ma2
+    # "test.2026-01-12_merged_gps_ma2_41000.0kg_80kmh.opt.JuMP.route.json",
 ]
 
 
@@ -82,6 +91,7 @@ class RouteMatcher:
         logger.info(f"Selected {self.route_name} with min distance {min_dis:.1f} meters.")
 
     def load_route_from_json(self, filename):
+        logger.info(f"Loading route {filename}")
         (route_data, all_speedplan_points) = self.get_route_from_json(filename)
         self.route_data = route_data
         self.all_speedplan_points = all_speedplan_points

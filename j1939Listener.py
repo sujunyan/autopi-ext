@@ -280,7 +280,7 @@ class J1939Listener(Listener):
 
 if __name__ == "__main__":
     config_logger(logging.DEBUG)
-    ls = J1939Listener(can_channel="can0", can_rate=250_000)
+    ls = J1939Listener(can_channel="can0", can_rate=500_000)
     ls.setup()
     time.sleep(5)
     priority = 6
