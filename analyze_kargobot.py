@@ -8,7 +8,7 @@ import matplotlib
 
 # --- Constants for Vehicle Physics ---
 g_vehicle_params = {
-    "mass_kg": 49000.0,
+    "mass_kg": 41000.0,
     "frontal_area_m2": 9.7,
     "drag_factor": 0.538,
     "air_density_kgm3": 1.225,
@@ -226,12 +226,29 @@ def load_kargobot_data(file_path):
     return df
         
 
-def analyze_one_csv(file_path, csv_file, data_dir):
+def analyze_one_csv(data_dir, csv_files, cut_flag = "full"):
     """
     Process a single CSV file, calculate physics, and generate subplots.
+
+    cut_flag: if full, do nothing, if ma1, cut the df and remain the first half, if ma2, cut the df and remain the second half
     """
 
-    df = load_kargobot_data(file_path)
+    dfs = []
+    for fname in csv_files:
+        file_path = os.path.join(data_dir, fname)
+        df = load_kargobot_data(file_path)
+        dfs.append(df)
+    merged_df = pd.concat(dfs, ignore_index=True)
+    merged_df = merged_df.sort_values('timestamp').reset_index(drop=True)
+    df = merged_df.copy()
+
+
+    if cut_flag == "ma1":
+        df = df.iloc[:len(df)//2].reset_index(drop=True)
+    elif cut_flag == "ma2":
+        df = df.iloc[len(df)//2:].reset_index(drop=True)
+
+    
 
     # Zoom into a specific time window (seconds since start)
     time_min = df["timestamp"].min()
@@ -246,7 +263,8 @@ def analyze_one_csv(file_path, csv_file, data_dir):
 
     mask_by_time_flag = False
     if mask_by_time_flag:
-        start_time, end_time = 45 * 60, (45+134) * 60
+        # start_time, end_time = 45 * 60, (45+134) * 60
+        start_time, end_time = 0 * 60, 1e10 * 60
         mask = (relative_time_sec >= start_time) & (relative_time_sec <= end_time)
         df = df[mask].copy()
     else:
@@ -294,7 +312,7 @@ def analyze_one_csv(file_path, csv_file, data_dir):
     if "pitch-rad" in df.columns:
         axes[0].plot(x_axis, df["pitch-rad"] * 180 / math.pi, color="blue", label="Pitch")
         axes[0].set_ylabel("Pitch (deg)")
-        axes[0].set_title(f"Data Analysis - {csv_file}")
+        axes[0].set_title(f"Data Analysis - {csv_files}")
 
     # 2. Speed
     if "front_axle_spd-kph" in df.columns:
@@ -332,18 +350,47 @@ def analyze_one_csv(file_path, csv_file, data_dir):
         # Add a new subplot if needed
         # kg/h
         data = df["fuel_rate"] / 3600.0
-        total = data.sum() * (df["timestamp"].iloc[1] - df["timestamp"].iloc[0])
-        print(f"Total Fuel Consumed: {total:.2f} kg")
+
+        delta_t = (df["timestamp"].iloc[1] - df["timestamp"].iloc[0])
+        delta_t_vec = df["timestamp"].diff().fillna(0).values
+        # delta_t_vec = np.where(delta_t_vec > 1.0, 1.0, delta_t_vec)
+        delta_fuel = data * delta_t_vec
+        df["delta_fuel"] = delta_fuel 
+        df["delta_t"] = delta_t_vec
+
+        total = df["delta_fuel"].sum()
+        df_relax = df[df["front_axle_spd-kph"] < 1.0]
+        total_relax = df_relax["delta_fuel"].sum()
+        # df_relax = df[df["front_axle_spd-kph"] < 1.0]
+        # print(df_relax["fuel_rate"].iloc[0])
+        # total_relax = (df_relax["fuel_rate"]).sum() / 3600.0 * delta_t
+
+
+        print(f"Total Fuel Consumed: {total:.2f} kg relax_part: {total_relax:.2f}kg, adjusted: {total-total_relax:.2f}kg")
         axes[7].plot(x_axis, data, color="green", label="Fuel Rate")
         axes[7].set_ylabel("Fuel Rate")
         axes[7].set_xlabel(x_label)
+
+
+
+    total_time = df["timestamp"].iloc[-1] - df["timestamp"].iloc[0]
+    # Relax time (sum of delta_t_vec where speed < 1.0)
+    # relax_mask = df["front_axle_spd-kph"] < 1.0
+    relax_time = df_relax["delta_t"].sum()
+    # Active travel time
+    active_time = total_time - relax_time
+    print(f"Total Travel Time: {total_time/60.0:.2f} min")
+    print(f"Relax Time: {relax_time/60.0:.2f} min")
+    print(f"Active Travel Time: {active_time/60.0:.2f} min")
+
 
     for ax in axes:
         ax.grid(ls="--")
         ax.legend(loc="upper right")
 
     plt.tight_layout()
-    output_plot = os.path.join(data_dir, "figs", f"{os.path.splitext(csv_file)[0]}_analysis.png")
+    
+    output_plot = os.path.join(data_dir, "figs", f"{os.path.splitext(csv_files[0])[0]}_analysis.png")
     fig.savefig(output_plot)
     plt.close(fig)
     print(f"Saved analysis plot to {output_plot}")
@@ -451,38 +498,32 @@ def run_analysis():
     for csv_file in csv_files:
         pass
         # print(csv_file)
-    idx=6
-    csv_file = [
-        "BAG_2026-01-06-08-14-53_10258-extractor.csv", #idx=0
-        "BAG_2026-01-06-09-05-54_10258-extractor.csv", #idx=1
-        "BAG_2026-01-06-10-11-18_10257-extractor.csv", #idx=2
-        "BAG_2026-01-06-10-14-08_10258-extractor.csv", #idx=3
-        "BAG_2026-01-06-14-06-05_10258-extractor.csv", #idx=4
-        "BAG_2026-01-07-07-57-27_10257-extractor.csv", #idx=5 #0107-257 ma1 34.79kg
-        "BAG_2026-01-07-08-02-33_10258-extractor.csv", #idx=6 #0107-258 ma1 35.57kg
-        "BAG_2026-01-07-13-23-06_10258-extractor.csv", #idx=7 # 0107-258 ma2, need to merge
-        "BAG_2026-01-07-16-01-10_10258-extractor.csv", #idx=8
-        "BAG_2026-01-07-16-16-43_10257-extractor.csv", #idx=9 0107-257
-        "BAG_2026-01-08-16-22-16_10258-extractor.csv", #idx=10
-        "BAG_2026-01-08-18-44-25_10258-extractor.csv", #idx=11
-        "BAG_2026-01-09-08-48-59_10151-extractor.csv", #idx=12 #0109-151 ma1, 30.92kg
+    csv_files_all = [
+        "BAG_2026-01-06-08-14-53_10258-extractor.csv", #idx=0 waiting in the parking lot
+        "BAG_2026-01-06-09-05-54_10258-extractor.csv", #idx=1 waiting in the parking lot
+        "BAG_2026-01-06-10-11-18_10257-extractor.csv", #idx=2 # 0106-257 ma1 36.87kg, 94.56min
+        # 
 
-        # "BAG_2026-01-06-10-11-18_10257-extractor.csv", #idx=0
-        # "BAG_2026-01-09-08-48-59_10151-extractor.csv", #idx=1 
-        # "BAG_2026-01-07-07-57-27_10257-extractor.csv", #idx=2
-        # "BAG_2026-01-07-16-16-43_10257-extractor.csv", #idx=3 
-        # "BAG_2026-01-07-08-02-33_10258-extractor.csv", #idx=4 
-        # "BAG_2026-01-08-16-22-16_10258-extractor.csv", #idx=5
-        # "BAG_2026-01-07-16-01-10_10258-extractor.csv", #idx=6 
-        # "BAG_2026-01-06-08-14-53_10258-extractor.csv", #idx=7
-        # "BAG_2026-01-06-09-05-54_10258-extractor.csv", #idx=8
-        # "BAG_2026-01-06-10-14-08_10258-extractor.csv", #idx=9
-        # "BAG_2026-01-06-14-06-05_10258-extractor.csv", #idx=10
-        # "BAG_2026-01-07-13-23-06_10258-extractor.csv", #idx=11
-        # "BAG_2026-01-08-18-44-25_10258-extractor.csv", #idx=12
-    ][idx]
-    file_path = os.path.join(data_dir, csv_file)
-    analyze_one_csv(file_path, csv_file, data_dir)
+        "BAG_2026-01-06-10-14-08_10258-extractor.csv", #idx=3 # 0106-258 ma1 36.79kg 94.26min
+        "BAG_2026-01-06-14-06-05_10258-extractor.csv", #idx=4 # 0106-258 ma2 37.51kg, 95.74min
+        "BAG_2026-01-07-07-57-27_10257-extractor.csv", #idx=5 #0107-257 ma1 35.66kg, 89.99min
+        "BAG_2026-01-07-08-02-33_10258-extractor.csv", #idx=6 #0107-258 ma1 35.54kg, 90.25min
+        "BAG_2026-01-07-13-23-06_10258-extractor.csv", #idx=7 # 0107-258 ma2, need to merge, cannot merge, idx 7 and 8 has different number of columns...
+        "BAG_2026-01-07-16-01-10_10258-extractor.csv", #idx=8 # combined with idx=7, 0107-258, 40.65kg, 99.07min
+        "BAG_2026-01-07-16-16-43_10257-extractor.csv", #idx=9 ma2 0107-257, need to combined with idx=5, ma2 39.73kg 99.71min
+        "BAG_2026-01-08-16-22-16_10258-extractor.csv", #idx=10 useless
+        "BAG_2026-01-08-18-44-25_10258-extractor.csv", #idx=11 useless
+        "BAG_2026-01-09-08-48-59_10151-extractor.csv", #idx=12 #0109-151 ma1, 31.38kg, 110.06min
+
+        "BAG_2026-01-11-09-03-13_10152-extractor.csv", #idx=13 #0111-152 ma1 33.39kg, 104.64min
+        "BAG_2026-01-11-15-17-52_10152-extractor.csv", #idx=14 #0111-152 ma2 32.16kg, 111.19min
+
+    ]
+    # print(csv_files1)
+    csv_files1 = [csv_files_all[i] for i in [14]]
+    # file_path = os.path.join(data_dir, csv_file)
+    cut_flag = ["full", "ma1", "ma2"][0]
+    analyze_one_csv(data_dir, csv_files1, cut_flag=cut_flag)
     # for csv_file in csv_files:
     #     file_path = os.path.join(data_dir, csv_file)
     #     analyze_one_csv(file_path, csv_file, data_dir)
