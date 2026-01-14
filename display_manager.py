@@ -7,7 +7,7 @@ import random
 
 logger = logging.getLogger("e2pilot_autopi")
 
-def find_nextion_serial_port(baud_rate=115200, timeout=2):
+def find_nextion_serial_port(baud_rate=115200, timeout=1):
     """
     Attempts to connect to all /dev/ttyUSB* ports, sends a Nextion display 'dp'
     query command, and checks for an expected response (containing 'dp=' and
@@ -31,7 +31,7 @@ def find_nextion_serial_port(baud_rate=115200, timeout=2):
         try:
             # Important setup: rtscts=False, dtr=False to avoid interfering with Nextion startup
             ser = serial.Serial(port, baud_rate, timeout=timeout)
-            time.sleep(1)  # Give the device and serial port some time to initialize
+            time.sleep(0.2)  # Give the device and serial port some time to initialize
             # Clear input buffer to avoid reading stale data from previous operations
             ser.flushInput()
             ser.write(TEST_COMMAND)
@@ -39,7 +39,7 @@ def find_nextion_serial_port(baud_rate=115200, timeout=2):
             start_time = time.time()
             received_data = b''
             # Wait until end bytes are received or timeout occurs
-            while time.time() - start_time < timeout + 1: # Extended read time slightly
+            while time.time() - start_time < timeout + 0.25: # Extended read time slightly
                 bytes_to_read = ser.in_waiting
                 if bytes_to_read > 0:
                     received_data += ser.read(bytes_to_read)
@@ -81,7 +81,6 @@ class DisplayManager:
 
     def setup(self):
         self.setup_serial()
-
         time.sleep(0.2)
         self.reset_display()
     
@@ -91,8 +90,8 @@ class DisplayManager:
             self.set_follow_range(0.0)
             self.set_follow_rate(0.0)
             self.set_distance(0.0)
-            self.set_suggest_speed(0.0)
-            self.set_speed(0.0)
+            self.set_suggest_speed(60.0)
+            self.set_speed(60.0)
 
     def setup_serial(self):
         logger.info("Setup serial port for display manager")
