@@ -3,6 +3,7 @@ import logging
 import threading
 import time
 from pathlib import Path
+import argparse
 
 import csv
 import can
@@ -28,16 +29,16 @@ logging.getLogger("can").setLevel(logging.DEBUG)
 
 # USE_1939 = True
 # Use location simulation mode
-VIRTUAL_SIMULATION_MODE = True
-OBD_MODE = ["J1939", "OBD2", "UDS"][2]
+
 
 class E2PilotAutopi:
-    def __init__(self):
-        if OBD_MODE == "J1939":
+    def __init__(self, virtual_sim_mode=False, obd_mode="UDS"):
+        self.obd_mode = obd_mode
+        if self.obd_mode == "J1939":
             self.obd_listener = J1939Listener()
-        elif OBD_MODE == "OBD2":
+        elif self.obd_mode == "OBD2":
             self.obd_listener = Obd2Listener()
-        elif OBD_MODE == "UDS":
+        elif self.obd_mode == "UDS":
             self.obd_listener = UdsListener()
        
 
@@ -393,7 +394,21 @@ class E2PilotAutopi:
         self.last_publish_virtual_location_time = time.time()
 
 
+def parse_args():
+    parser = argparse.ArgumentParser(description="E2PilotAutopi Main")
+    parser.add_argument("--obd_mode", choices=["J1939", "OBD2", "UDS"], default="UDS", help="OBD mode to use")
+    parser.add_argument("--virtual_sim_mode", action="store_true", help="Enable virtual simulation mode")
+    parser.add_argument("--no-virtual_sim_mode", dest="virtual_sim_mode", action="store_false", help="Disable virtual simulation mode")
+    parser.set_defaults(virtual_sim_mode=False)
+    return parser.parse_args()
+
 def main():
+    args = parse_args()
+    # OBD_MODE = args.obd_mode
+    # VIRTUAL_SIMULATION_MODE = args.virtual_sim_mode
+    # VIRTUAL_SIMULATION_MODE = True
+    # OBD_MODE = ["J1939", "OBD2", "UDS"][2]
+
     if VIRTUAL_SIMULATION_MODE:
         config_logger(logging.INFO)
     else:
@@ -402,11 +417,11 @@ def main():
 
     logger.info("-----------------------------------------------")
     logger.info("-----------------------------------------------")
-    logger.info("Initializing E2Pilot Application")
+    logger.info("E2Pilot application with args: " + str(args))
 
     app = None
     try:
-        app = E2PilotAutopi()
+        app = E2PilotAutopi(virtual_sim_mode=args.virtual_sim_mode, obd_mode=args.obd_mode)
         app.setup()
         app.main_loop()
     except can.exceptions.CanError as e:
