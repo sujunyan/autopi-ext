@@ -107,12 +107,12 @@ class UdsListener(Listener):
             self.save_raw_data_csv(d, ts)
 
 
-            for key in ["veh_spd"]:
+            for key in ["speed"]:
                 if key in d.keys():
                     topic = f"{self.mqtt_topic}{key}"
                     payload = {
                         "timestamp": ds,
-                        key: d[key],
+                        "value": d[key],
                     }
                     self.publish_mqtt(topic, payload)
                     # logger.debug(f"Published {topic}: {payload}")
@@ -174,14 +174,14 @@ class EngineCodec(udsoncan.DidCodec):
         s = " ".join(f"{b:02X}" for b in payload)
         rpm_candidate = struct.unpack('>H', payload[21:23])[0]/8
         torque_perc = payload[38] - 125.0
-        veh_spd = struct.unpack('>H', payload[23:25])[0] * 0.00390625
-        # logger.info(f"Got data {s} len={len(payload)} rpm={rpm_candidate}, torque_perc={torque_perc}, veh_spd={veh_spd}")
-        logger.debug(f"rpm={rpm_candidate}, torque_perc={torque_perc}, veh_spd={veh_spd}")
+        speed = struct.unpack('>H', payload[23:25])[0] * 0.00390625
+        # logger.info(f"Got data {s} len={len(payload)} rpm={rpm_candidate}, torque_perc={torque_perc}, speed={speed}")
+        logger.debug(f"rpm={rpm_candidate}, torque_perc={torque_perc}, speed={speed}")
         
         d = {
             "rpm" : rpm_candidate,
             "torque" : torque_perc,
-            "veh_spd" : veh_spd,
+            "speed" : speed,
         }
         return d
 

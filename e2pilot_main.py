@@ -17,6 +17,7 @@ from embed_gps_listener import EmbedGpsListener
 from logger import config_logger, logger
 from j1939Listener import J1939Listener
 from obd2_listener import Obd2Listener
+from uds_listener import UdsListener
 from route_matcher import RouteMatcher
 from utils import haversine
 import route_matcher
@@ -25,17 +26,24 @@ import route_matcher
 logging.getLogger("j1939").setLevel(logging.DEBUG)
 logging.getLogger("can").setLevel(logging.DEBUG)
 
-USE_1939 = True
+# USE_1939 = True
 # Use location simulation mode
 VIRTUAL_SIMULATION_MODE = True
+OBD_MODE = ["J1939", "OBD2", "UDS"][2]
 
 class E2PilotAutopi:
     def __init__(self):
         self.use_1939 = USE_1939
-        if self.use_1939:
+        if OBD_MODE == "J1939":
             self.obd_listener = J1939Listener()
-        else:
+        elif OBD_MODE == "OBD2":
             self.obd_listener = Obd2Listener()
+        elif OBD_MODE == "UDS":
+            self.obd_listener = UdsListener()
+        # if self.use_1939:
+        #     self.obd_listener = J1939Listener()
+        # else:
+        #     self.obd_listener = Obd2Listener()
 
         # If true, we will simulate by publishing virtual location messages on mqtt
         self.virtual_sim_mode = VIRTUAL_SIMULATION_MODE
@@ -155,6 +163,8 @@ class E2PilotAutopi:
         return flag
 
     def is_obd_alive(self):
+        if self.obd_listener.enable == False:
+            return False
         flag = (time.time() - self.last_obd_speed_time) < self.update_time_threshold
         return flag
 
@@ -169,6 +179,9 @@ class E2PilotAutopi:
         elif msg.topic == "obd2/speed":
             self.current_speed = data["value"]
             logger.debug(f"Got speed from obd2/speed: {self.current_speed}")
+            self.last_obd_speed_time = time.time()
+        elif msg.topic == "uds/speed":
+            self.current_speed = data["value"]
             self.last_obd_speed_time = time.time()
         elif msg.topic == "h11gps/speed":
             speed = data["speed_kmh"]
@@ -189,6 +202,7 @@ class E2PilotAutopi:
                 ("j1939/Wheel-Based_Vehicle_Speed", 0),
                 ("obd2/speed", 0),
                 ("h11gps/speed", 0),
+                ("uds/veh_spd", 0)
             ]
         )
         # Start the MQTT client loop in the background
