@@ -2,9 +2,10 @@
 This script is for UDS, cargobot X5000
 """
 
-import can, isotp, usdoncan
+import can, isotp, udsoncan
 from logger import config_logger
 import subprocess, csv, time, logging
+from datetime import datetime
 
 from udsoncan.connections import IsoTPSocketConnection
 from udsoncan.client import Client
@@ -26,7 +27,7 @@ The class for listening to the OBD with the UDS protocol
 class UdsListener(Listener):
     def __init__(self, 
         mqtt_broker="localhost",
-        can_cannel="can0",
+        can_channel="can0",
         bustype="socketcan",
         can_rate=500000,
         ):
@@ -58,22 +59,26 @@ class UdsListener(Listener):
 
         # self.bus = can.interface.Bus(channel=self.can_cannel, bustype=self.bustype)
 
-        self.connection = IsoTPSocketConnection(self.can_cannel, self.isotp_address_mode, rxid=self.rxid, txid=self.txid)
+        self.connection = IsoTPSocketConnection(self.can_channel, 
+            isotp.Address(self.isotp_address_mode, rxid=self.rxid, txid=self.txid)
+            )
 
-        self.uds_client = udsoncan.Client(self.connection, config=self.uds_config)
+
+        self.uds_client = Client(self.connection, config=self.uds_config)
+        self.uds_client.open()
 
     def setup(self):
-        if not self.setup_can_interface():
+        if not utils.setup_can_interface(self.can_channel, self.can_rate):
             self.enable = False
             return
 
         try:
             self.setup_mqtt()
-            self.set_uds()
+            self.setup_uds()
             self.enable = True
             logger.info("UdsListener setup complete.")
         except Exception as e:
-            logger.error(f"UdsListener setup error: {e}")
+            logger.exception(f"UdsListener setup error1: {e}")
             self.enable = False
 
     def save_raw_data_csv(self, d, ts):
@@ -94,24 +99,25 @@ class UdsListener(Listener):
         if not self.enable:
             return
 
+        DEBUG = True
         try:
-            # print(response.service_data.values[0x0102].hex())
-            self.uds_client.tester_present()
-            # engine information
-            d = dict()
-            for data_id in self.data_identifiers.keys():
-                response = self.uds_client.read_data_by_identifier(data_id)
-                d.update(response.service_data.values[data_id])
+            if DEBUG:
+                d = {"speed" : 72}
+            else:
+                self.uds_client.tester_present()
+                d = dict()
+                for data_id in self.data_identifiers.keys():
+                    response = self.uds_client.read_data_by_identifier(data_id)
+                    d.update(response.service_data.values[data_id])
             
             ts = time.time()
             self.save_raw_data_csv(d, ts)
-
 
             for key in ["speed"]:
                 if key in d.keys():
                     topic = f"{self.mqtt_topic}{key}"
                     payload = {
-                        "timestamp": ds,
+                        "timestamp": ts,
                         "value": d[key],
                     }
                     self.publish_mqtt(topic, payload)
@@ -191,7 +197,7 @@ class EngineCodec(udsoncan.DidCodec):
 
 if __name__ == "__main__":
     config_logger(logging.DEBUG)
-    ls = UdsListener(can_cannel="can0", can_rate=500_000)
+    ls = UdsListener(can_channel="can0", can_rate=500_000)
     ls.setup()
     ls.loop_start()
 
