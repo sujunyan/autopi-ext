@@ -17,7 +17,6 @@ import struct
 import utils
 from listener import Listener
 
-config_logger(logging.DEBUG)
 
 logger = logging.getLogger("e2pilot_autopi")
 

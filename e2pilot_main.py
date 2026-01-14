@@ -33,17 +33,13 @@ OBD_MODE = ["J1939", "OBD2", "UDS"][2]
 
 class E2PilotAutopi:
     def __init__(self):
-        self.use_1939 = USE_1939
         if OBD_MODE == "J1939":
             self.obd_listener = J1939Listener()
         elif OBD_MODE == "OBD2":
             self.obd_listener = Obd2Listener()
         elif OBD_MODE == "UDS":
             self.obd_listener = UdsListener()
-        # if self.use_1939:
-        #     self.obd_listener = J1939Listener()
-        # else:
-        #     self.obd_listener = Obd2Listener()
+       
 
         # If true, we will simulate by publishing virtual location messages on mqtt
         self.virtual_sim_mode = VIRTUAL_SIMULATION_MODE
@@ -87,9 +83,9 @@ class E2PilotAutopi:
         self.max_move_threshold_m = 1000_000.0  # Maximum movement to consider for distance tracking, I guess there is no tunnel with 1000km long...
 
 
-        # self.obd_listener.setup()
+        self.obd_listener.setup()
         self.display_manager.setup(); 
-        logger.warning("Disable display manager and OBD listener.")
+        # logger.warning("Disable display manager and OBD listener.")
         self.setup_mqtt_speed_client()
         self.setup_mqtt_location_client()
         self.setup_mqtt_distance_client()
@@ -202,7 +198,7 @@ class E2PilotAutopi:
                 ("j1939/Wheel-Based_Vehicle_Speed", 0),
                 ("obd2/speed", 0),
                 ("h11gps/speed", 0),
-                ("uds/veh_spd", 0)
+                ("uds/speed", 0)
             ]
         )
         # Start the MQTT client loop in the background
