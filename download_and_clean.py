@@ -48,7 +48,7 @@ def main():
         print("Download successful. Deleting data from remote server...")
 
         remote_path = os.path.join(REMOTE_DATA_PATH, folder, extension)
-        rm_cmd = f'ssh {REMOTE_USER}@{REMOTE_HOST} "rm -f {remote_path}"'
+        rm_cmd = f'ssh {REMOTE_USER}@{REMOTE_HOST} "rm -rf {remote_path}"'
         # print(rm_cmd)
         if run_command(rm_cmd) == 0:
             print(f"Remote {folder} data cleaned successfully.")

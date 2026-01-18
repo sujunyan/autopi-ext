@@ -248,8 +248,6 @@ def analyze_one_csv(data_dir, csv_files, cut_flag = "full"):
     elif cut_flag == "ma2":
         df = df.iloc[len(df)//2:].reset_index(drop=True)
 
-    
-
     # Zoom into a specific time window (seconds since start)
     time_min = df["timestamp"].min()
     relative_time_sec = df["timestamp"] - time_min
@@ -261,10 +259,11 @@ def analyze_one_csv(data_dir, csv_files, cut_flag = "full"):
     # start_time, end_time = 50 * 60, 75 * 60
     # start_time, end_time = 40 * 60, (40+150) * 60
 
-    mask_by_time_flag = False
+    mask_by_time_flag = True
     if mask_by_time_flag:
         # start_time, end_time = 45 * 60, (45+134) * 60
-        start_time, end_time = 0 * 60, 1e10 * 60
+        # start_time, end_time = 0 * 60, 1e10 * 60
+        start_time, end_time = 77.8 * 60, 80 * 60
         mask = (relative_time_sec >= start_time) & (relative_time_sec <= end_time)
         df = df[mask].copy()
     else:
@@ -367,7 +366,8 @@ def analyze_one_csv(data_dir, csv_files, cut_flag = "full"):
 
 
         print(f"Total Fuel Consumed: {total:.2f} kg relax_part: {total_relax:.2f}kg, adjusted: {total-total_relax:.2f}kg")
-        axes[7].plot(x_axis, data, color="green", label="Fuel Rate")
+        kj_per_kg = 50e6 / 1000.0 # 50MJ per kg
+        axes[7].plot(x_axis, data * kj_per_kg, color="green", label="Fuel Rate (kW)")
         axes[7].set_ylabel("Fuel Rate")
         axes[7].set_xlabel(x_label)
 
@@ -506,6 +506,7 @@ def run_analysis():
 
         "BAG_2026-01-06-10-14-08_10258-extractor.csv", #idx=3 # 0106-258 ma1 36.79kg 94.26min
         "BAG_2026-01-06-14-06-05_10258-extractor.csv", #idx=4 # 0106-258 ma2 37.51kg, 95.74min
+
         "BAG_2026-01-07-07-57-27_10257-extractor.csv", #idx=5 #0107-257 ma1 35.66kg, 89.99min
         "BAG_2026-01-07-08-02-33_10258-extractor.csv", #idx=6 #0107-258 ma1 35.54kg, 90.25min
         "BAG_2026-01-07-13-23-06_10258-extractor.csv", #idx=7 # 0107-258 ma2, need to merge, cannot merge, idx 7 and 8 has different number of columns...
@@ -514,14 +515,21 @@ def run_analysis():
         "BAG_2026-01-08-16-22-16_10258-extractor.csv", #idx=10 useless
         "BAG_2026-01-08-18-44-25_10258-extractor.csv", #idx=11 useless
         "BAG_2026-01-09-08-48-59_10151-extractor.csv", #idx=12 #0109-151 ma1, 31.38kg, 110.06min
-
+        # missing 151 ma2
         "BAG_2026-01-11-09-03-13_10152-extractor.csv", #idx=13 #0111-152 ma1 33.39kg, 104.64min
         "BAG_2026-01-11-15-17-52_10152-extractor.csv", #idx=14 #0111-152 ma2 32.16kg, 111.19min
-        ## The above is recorded
+        "BAG_2026-01-09-09-09-08_10152-extractor.csv", # idx=15 #0109-152 ma1 31.36kg, 110.08min
+        "BAG_2026-01-09-16-10-20_10152-extractor.csv", # idx=16 #0109-152 ma2 37.34kg, 103.07min
+        "BAG_2026-01-11-09-36-40_10151-extractor.csv", #idx=17 0111-151 ma1 33.6kg, 105.35min; ma2 32.18kg, 110.41min
+        "BAG_2026-01-13-09-13-31_10151-extractor.csv", #idx=18 0113-151 ma1 34.49kg, 91.9min; ma2 37.65kg, 96.70min
+        ## The above is recorded.
+        
+        "BAG_2026-01-13-09-29-25_10152-extractor.csv", #idx=19 0113-152 ma1, 34.38kg, 91.37min
+        "BAG_2026-01-13-14-19-16_10152-extractor.csv", #idx=20 0113-152 ma2, 37.62kg, 96.04min
 
     ]
     # print(csv_files1)
-    csv_files1 = [csv_files_all[i] for i in [7,8]]
+    csv_files1 = [csv_files_all[i] for i in [5]]
     # file_path = os.path.join(data_dir, csv_file)
     cut_flag = ["full", "ma1", "ma2"][0]
     analyze_one_csv(data_dir, csv_files1, cut_flag=cut_flag)
