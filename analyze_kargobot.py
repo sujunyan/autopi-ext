@@ -234,6 +234,8 @@ def analyze_one_csv(data_dir, csv_files, cut_flag = "full"):
     cut_flag: if full, do nothing, if ma1, cut the df and remain the first half, if ma2, cut the df and remain the second half
     """
 
+    ret_dict = {}
+
     dfs = []
     for fname in csv_files:
         file_path = os.path.join(data_dir, fname)
@@ -368,11 +370,17 @@ def analyze_one_csv(data_dir, csv_files, cut_flag = "full"):
         axes[7].plot(x_axis, data * kj_per_kg, color="green", label="Fuel Rate (kW)")
         axes[7].set_ylabel("Fuel Rate")
         axes[7].set_xlabel(x_label)
+        ret_dict["total_fuel"] = total
+        ret_dict["relax_fuel"] = total_relax
+        ret_dict["adjust_fuel"] = total - total_relax
 
     total_time = df["timestamp"].iloc[-1] - df["timestamp"].iloc[0]
     relax_time = df_relax["delta_t"].sum()
     # Active travel time
     active_time = total_time - relax_time
+    ret_dict["total_time"] = total_time
+    ret_dict["relax_time"] = relax_time
+    ret_dict["active_time"] = active_time
     print(f"Total Travel Time: {total_time/60.0:.2f} min")
     print(f"Relax Time: {relax_time/60.0:.2f} min")
     print(f"Active Travel Time: {active_time/60.0:.2f} min")
@@ -388,6 +396,7 @@ def analyze_one_csv(data_dir, csv_files, cut_flag = "full"):
     fig.savefig(output_plot)
     plt.close(fig)
     print(f"Saved analysis plot to {output_plot}")
+    return ret_dict
 
 def get_relax_df(df):
 
@@ -400,7 +409,7 @@ def get_relax_df(df):
             start = i
             # 向后查找第一个>=60的点
             end = start
-            while end < len(spd) and spd[end] < 60:
+            while end < len(spd) and spd[end] < 70:
                 end += 1
             rest_starts.append(start)
             rest_ends.append(end)
@@ -500,16 +509,13 @@ def estimate_and_test_model():
     print(f"Saved model comparison plot to {output_plot}")
 
 
-def run_analysis():
+def run_analysis(data_dir):
     """
     Main entry point for data analysis and model estimation.
     """
-    data_dir = os.path.dirname(os.path.abspath(__file__))
-    # data_dir = os.path.join(data_dir, "data", "kargobot")
-    data_dir = os.path.join(data_dir, "data", "kargobot", "enxin")
+    
     csv_files = [f for f in os.listdir(data_dir) if f.endswith(".csv")]
-    matplotlib.use("Agg")  # Use non-interactive backend
-    matplotlib.rc("font", family='Songti SC')
+    summary_filepath = os.path.join(data_dir, "kargobot_summary.csv")
     # matplotlib.rc("font", family='STSong')  # For Chinese characters
     # matplotlib.rc("font", **{"sans-serif": ["SimSun", "Arial"]})
 
@@ -563,7 +569,7 @@ def run_analysis():
         # 2 ---------------------
         (["BAG_2026-01-07-07-57-27_10257-extractor.csv"], "full", "2-ma1-257"), #idx=5 #0107-257 ma1 35.66kg, 89.99min
 
-        (["BAG_2026-01-07-16-16-43_10257-extractor.csv", "BAG_2026-01-07-07-57-27_10257-extractor.csv"], "full", "2-ma2-257"), #idx=9 ma2 0107-257, need to combined with idx=5, ma2 39.73kg 99.71min
+        (["BAG_2026-01-07-16-16-43_10257-extractor.csv", "BAG_2026-01-07-07-57-27_10257-extractor.csv"], "ma2", "2-ma2-257"), #idx=9 ma2 0107-257, need to combined with idx=5, ma2 39.73kg 99.71min
 
         (["BAG_2026-01-07-08-02-33_10258-extractor.csv",], "full", "2-ma1-258"), #idx=6 #0107-258 ma1 35.54kg, 90.25min
 
@@ -599,20 +605,91 @@ def run_analysis():
     # csv_files1 = [csv_files_all[i] for i in [15]]
     # file_path = os.path.join(data_dir, csv_file)
     # cut_flag = ["full", "ma1", "ma2"][0]
+    ret_dict_list = []
     for i in range(len(arg_vec)):
-    # for i in [3]:
+    # for i in [0, 1, 2, 3, 4, 5, 7, 8]:
         csv_files1, cut_flag, name = arg_vec[i]
         print("*"*80)
         print(name)
-        analyze_one_csv(data_dir, csv_files1, cut_flag=cut_flag)
-    # for csv_file in csv_files:
-    #     file_path = os.path.join(data_dir, csv_file)
-    #     analyze_one_csv(file_path, csv_file, data_dir)
-    #     break
+        ret_dict = analyze_one_csv(data_dir, csv_files1, cut_flag=cut_flag)
+        ret_dict["name"] = name
+        trip_idx, direction, veh_num = name.split("-")
+        ret_dict["direction"] = direction
+        ret_dict["trip_idx"] = trip_idx
+        ret_dict["veh_num"] = veh_num
+        if veh_num in ["151", "257"]:
+            ret_dict["front_back"] = "front"
+        else:
+            ret_dict["front_back"] = "back"
+        if trip_idx in ["3", "4"]:
+            ret_dict["eco_nav"] = True
+        else:
+            ret_dict["eco_nav"] = False
+        weight_dict = {
+            "151" : 43.6, "152" : 46.7, "257" : 41.0, "258": 41.0
+        }
+        ret_dict["weight"] = weight_dict[veh_num]
 
-    # Fit and evaluate model
-    # estimate_and_test_model()
+        ret_dict_list.append(ret_dict)
 
+    csv_df = pd.DataFrame(ret_dict_list)
+    csv_df.to_csv(summary_filepath, index=False)
+    print(summary_filepath)
+
+def plot_summary(data_dir):
+    df = pd.read_csv(summary_filepath)
+    distance = 120.0
+    df["fuel_by_100km"] = df["adjust_fuel"] / distance * 100
+    df["avg_fuel"] = df["fuel_by_100km"] / df["weight"]
+    df["speed"] = distance / (df["active_time"] / 3600.0)
+    fig, ax = plt.subplots()
+
+    ax.set_xlabel("平均速度 (km/h)")
+    ax.set_ylabel("平均气耗 (kg/100km/ton)")
+
+    fig.set_size_inches((4.8, 4.0))
+
+    front_back = "front"
+    for (direction, eco_nav), group in df.groupby(["direction", "eco_nav", ]):
+    # for (direction, eco_nav, front_back), group in df.groupby(["direction", "eco_nav", "front_back"]):
+        x = group["speed"]
+        y = group["avg_fuel"]
+        label = ""
+        label += "去程" if direction == "ma1" else "回程"
+        label += "|" + ("节能导航" if eco_nav else "司机驾驶")
+        # label += "|" + ("前车" if front_back == "front" else "后车")
+        # label = f"{direction} | {eco_nav} | {front_back}"
+        if eco_nav == True:
+            color_dark = '#228B22'  # 深绿色
+            color_light = '#90EE90' # 浅绿色
+        else:
+            color_dark = '#00008B'  # 深蓝色
+            color_light = '#87CEFA' # 浅蓝色
+        color = color_dark if front_back == 'front' else color_light
+        # color = 'green' if eco_nav == '节能导航' else 'blue'
+        # color = color_dark 
+        marker = '>' if direction == 'ma1' else '<'
+        # edgecolor = 'red' if front_back == '前车' else 'black'
+        plt.scatter(x, y, label=label, color=color, marker=marker, alpha=0.7, s=64,)
+    
+
+    plt.legend(bbox_to_anchor=(0.5, 1), loc='lower center', ncol=2)
+
+    ax.grid(ls="--")
+    fig.tight_layout()
+    output_plot = os.path.join(data_dir, "figs", f"summary_analysis.png")
+    fig.savefig(output_plot, dpi=400)
+    plt.close(fig)
+    print(f"Saved summary plot to {output_plot}")
 
 if __name__ == "__main__":
-    run_analysis()
+    data_dir = os.path.dirname(os.path.abspath(__file__))
+    # data_dir = os.path.join(data_dir, "data", "kargobot")
+    data_dir = os.path.join(data_dir, "data", "kargobot", "enxin")
+    summary_filepath = os.path.join(data_dir, "kargobot_summary.csv")
+    matplotlib.use("Agg")  # Use non-interactive backend
+    matplotlib.rc("font", family='Songti SC')
+    if False:
+        run_analysis(data_dir)
+
+    plot_summary(data_dir)
