@@ -13,6 +13,7 @@ LOCAL_DOWNLOAD_PATH = "/Users/junyansu/dev/autopi-ext/"
 SUBFOLDERS = {
     "data/h11": "*.txt",
     "data/j1939": "*.csv",
+    "data/uds" : "*.csv",
     "data/embedgps": "*.txt",
     "data/embedacc": "*.txt",
     "logs/" : "*"

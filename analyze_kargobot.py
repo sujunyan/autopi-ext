@@ -205,6 +205,15 @@ def load_kargobot_data(file_path):
 
         available_map = {k: v for k, v in column_map.items() if k in df.columns}
         df = df.rename(columns=available_map)
+    elif "uds" in file_path:
+        column_map = {
+            "Timestamp" : "timestamp",
+            "speed" : "front_axle_spd-kph",
+            "torque" : "act_eng_percent_trq-0~100",
+            "rpm" : "eng_spd",
+        }
+        available_map = {k: v for k, v in column_map.items() if k in df.columns}
+        df = df.rename(columns=available_map)
     else:
         column_map = {
             "timestamp-ns": "timestamp",
@@ -226,7 +235,6 @@ def load_kargobot_data(file_path):
 
     return df
         
-
 def analyze_one_csv(data_dir, csv_files, cut_flag = "full"):
     """
     Process a single CSV file, calculate physics, and generate subplots.
@@ -256,11 +264,7 @@ def analyze_one_csv(data_dir, csv_files, cut_flag = "full"):
     relative_time_sec = df["timestamp"] - time_min
     df['datetime'] = pd.to_datetime(df['timestamp'], unit='s', utc=True)
     df['datetime'] = df['datetime'].dt.tz_convert('Asia/Shanghai')
-    # print(list(df.columns))
-
-    # Adjustable time window
-    # start_time, end_time = 50 * 60, 75 * 60
-    # start_time, end_time = 40 * 60, (40+150) * 60
+    
 
     mask_by_time_flag = False
     if mask_by_time_flag:
@@ -269,7 +273,7 @@ def analyze_one_csv(data_dir, csv_files, cut_flag = "full"):
         start_time, end_time = 77.8 * 60, 80.0 * 60 # combined with idx=5
         mask = (relative_time_sec >= start_time) & (relative_time_sec <= end_time)
         df = df[mask].copy()
-    else:
+    elif "pose-x" in df.columns:
         # filter by location
         start_x, start_y =  9355.450582, -5481.516917
         end_x, end_y = 117352.6759, 9514.426308
@@ -286,6 +290,8 @@ def analyze_one_csv(data_dir, csv_files, cut_flag = "full"):
 
         # Mask the DataFrame
         df = df.loc[start_idx:end_idx].copy()
+    else:
+        print("Use the original raw df")
 
     # print pose-x and pose-y at start and end
     # print("Start Pose (x, y):", df["pose-x"].iloc[0], df["pose-y"].iloc[0])
@@ -427,8 +433,6 @@ def get_relax_df(df):
     #df_relax = df[df["front_axle_spd-kph"] < 1.0]
 
     return df_relax
-
-
 
 def estimate_and_test_model():
     """
@@ -682,6 +686,29 @@ def plot_summary(data_dir):
     plt.close(fig)
     print(f"Saved summary plot to {output_plot}")
 
+
+def run_analysis_uds():
+    """
+    Run analysis for the UDS data obtained directly from OBD port by ourselves.
+    """
+    data_dir = os.path.dirname(os.path.abspath(__file__))
+    data_dir = os.path.join(data_dir, "data", "uds")
+    csv_files_list = [
+        # 0115, eco_nav
+        ["20260115_0936_uds_raw_data.csv"], #idx=0, ma1
+        ["20260115_1629_uds_raw_data.csv", "20260115_1757_uds_raw_data.csv"], #idx=1, ma2
+
+        # 0117, no_eco_nav
+        ["20260117_0935_uds_raw_data.csv",], #idx=2, ma1
+        ["20260117_1543_uds_raw_data.csv", "20260117_1616_uds_raw_data.csv",], #idx=3, ma2
+    ]
+    csv_files1 = csv_files_list[3]
+
+
+    cut_flag = ["full", "ma1", "ma2"][0]
+    ret_dict = analyze_one_csv(data_dir, csv_files1, cut_flag=cut_flag)
+    pass
+
 if __name__ == "__main__":
     data_dir = os.path.dirname(os.path.abspath(__file__))
     # data_dir = os.path.join(data_dir, "data", "kargobot")
@@ -691,5 +718,5 @@ if __name__ == "__main__":
     matplotlib.rc("font", family='Songti SC')
     if False:
         run_analysis(data_dir)
-
-    plot_summary(data_dir)
+    run_analysis_uds()
+    # plot_summary(data_dir)
