@@ -60,7 +60,8 @@ def calculate_physics_components(df, vehicle_params):
     v = df["front_axle_spd-kph"] / 3.6  # velocity in m/s
     a = df["longitudinal_acc-m/s2"]  # acceleration in m/s2
     ts = df["timestamp"]
-    acc = np.gradient(v, ts)  # Numerical differentiation
+    with np.errstate(divide='ignore', invalid='ignore'):
+        acc = np.gradient(v, ts)  # Numerical differentiation
     theta = df["pitch-rad"]  # pitch in rad
     trq_pct = df["act_eng_percent_trq-0~100"]
     eng_spd_rpm = df["eng_spd"]
@@ -259,11 +260,11 @@ def analyze_one_csv(data_dir, csv_files, cut_flag = "full"):
     # start_time, end_time = 50 * 60, 75 * 60
     # start_time, end_time = 40 * 60, (40+150) * 60
 
-    mask_by_time_flag = True
+    mask_by_time_flag = False
     if mask_by_time_flag:
         # start_time, end_time = 45 * 60, (45+134) * 60
         # start_time, end_time = 0 * 60, 1e10 * 60
-        start_time, end_time = 77.8 * 60, 80 * 60
+        start_time, end_time = 77.8 * 60, 80.0 * 60 # combined with idx=5
         mask = (relative_time_sec >= start_time) & (relative_time_sec <= end_time)
         df = df[mask].copy()
     else:
@@ -285,8 +286,8 @@ def analyze_one_csv(data_dir, csv_files, cut_flag = "full"):
         df = df.loc[start_idx:end_idx].copy()
 
     # print pose-x and pose-y at start and end
-    print("Start Pose (x, y):", df["pose-x"].iloc[0], df["pose-y"].iloc[0])
-    print("End Pose (x, y):", df["pose-x"].iloc[-1], df["pose-y"].iloc[-1])
+    # print("Start Pose (x, y):", df["pose-x"].iloc[0], df["pose-y"].iloc[0])
+    # print("End Pose (x, y):", df["pose-x"].iloc[-1], df["pose-y"].iloc[-1])
 
 
     # x_axis = (df["timestamp"] - time_min) / 60.0
@@ -358,11 +359,8 @@ def analyze_one_csv(data_dir, csv_files, cut_flag = "full"):
         df["delta_t"] = delta_t_vec
 
         total = df["delta_fuel"].sum()
-        df_relax = df[df["front_axle_spd-kph"] < 1.0]
+        df_relax = get_relax_df(df)
         total_relax = df_relax["delta_fuel"].sum()
-        # df_relax = df[df["front_axle_spd-kph"] < 1.0]
-        # print(df_relax["fuel_rate"].iloc[0])
-        # total_relax = (df_relax["fuel_rate"]).sum() / 3600.0 * delta_t
 
 
         print(f"Total Fuel Consumed: {total:.2f} kg relax_part: {total_relax:.2f}kg, adjusted: {total-total_relax:.2f}kg")
@@ -371,11 +369,7 @@ def analyze_one_csv(data_dir, csv_files, cut_flag = "full"):
         axes[7].set_ylabel("Fuel Rate")
         axes[7].set_xlabel(x_label)
 
-
-
     total_time = df["timestamp"].iloc[-1] - df["timestamp"].iloc[0]
-    # Relax time (sum of delta_t_vec where speed < 1.0)
-    # relax_mask = df["front_axle_spd-kph"] < 1.0
     relax_time = df_relax["delta_t"].sum()
     # Active travel time
     active_time = total_time - relax_time
@@ -394,6 +388,36 @@ def analyze_one_csv(data_dir, csv_files, cut_flag = "full"):
     fig.savefig(output_plot)
     plt.close(fig)
     print(f"Saved analysis plot to {output_plot}")
+
+def get_relax_df(df):
+
+    spd = df["front_axle_spd-kph"].values
+    rest_starts = []
+    rest_ends = []
+    i = 0
+    while i < len(spd):
+        if spd[i] < 1.0:
+            start = i
+            # 向后查找第一个>=60的点
+            end = start
+            while end < len(spd) and spd[end] < 60:
+                end += 1
+            rest_starts.append(start)
+            rest_ends.append(end)
+            i = end  # 跳到休息段结束后继续
+        else:
+            i += 1
+
+    # 构造mask，True为非休息段
+    mask = np.zeros(len(df), dtype=bool)
+    for s, e in zip(rest_starts, rest_ends):
+        mask[s:e] = True
+
+    df_relax = df[mask].copy()
+
+    #df_relax = df[df["front_axle_spd-kph"] < 1.0]
+
+    return df_relax
 
 
 
@@ -498,41 +522,89 @@ def run_analysis():
     for csv_file in csv_files:
         pass
         # print(csv_file)
-    csv_files_all = [
-        "BAG_2026-01-06-08-14-53_10258-extractor.csv", #idx=0 waiting in the parking lot
-        "BAG_2026-01-06-09-05-54_10258-extractor.csv", #idx=1 waiting in the parking lot
-        "BAG_2026-01-06-10-11-18_10257-extractor.csv", #idx=2 # 0106-257 ma1 36.87kg, 94.56min
-        # 
+    # csv_files_all = [
+    #     "BAG_2026-01-06-08-14-53_10258-extractor.csv", #idx=0 waiting in the parking lot
+    #     "BAG_2026-01-06-09-05-54_10258-extractor.csv", #idx=1 waiting in the parking lot
+    #     "BAG_2026-01-06-10-11-18_10257-extractor.csv", #idx=2 # 0106-257 ma1 36.87kg, 94.56min
+    #     # 
+    #     "BAG_2026-01-06-10-14-08_10258-extractor.csv", #idx=3 # 0106-258 ma1 36.79kg 94.26min
+    #     "BAG_2026-01-06-14-06-05_10258-extractor.csv", #idx=4 # 0106-258 ma2 37.51kg, 95.74min
+    #     "BAG_2026-01-07-07-57-27_10257-extractor.csv", #idx=5 #0107-257 ma1 35.66kg, 89.99min
+    #     "BAG_2026-01-07-08-02-33_10258-extractor.csv", #idx=6 #0107-258 ma1 35.54kg, 90.25min
+    #     "BAG_2026-01-07-13-23-06_10258-extractor.csv", #idx=7 # 0107-258 ma2, need to merge, cannot merge, idx 7 and 8 has different number of columns...
+    #     "BAG_2026-01-07-16-01-10_10258-extractor.csv", #idx=8 # combined with idx=7, 0107-258, 40.65kg, 99.07min
+    #     "BAG_2026-01-07-16-16-43_10257-extractor.csv", #idx=9 ma2 0107-257, need to combined with idx=5, ma2 39.73kg 99.71min
+    #     "BAG_2026-01-08-16-22-16_10258-extractor.csv", #idx=10 useless
+    #     "BAG_2026-01-08-18-44-25_10258-extractor.csv", #idx=11 useless
+    #     "BAG_2026-01-09-08-48-59_10151-extractor.csv", #idx=12 #0109-151 ma1, 31.38kg, 110.06min
+    #     # missing 151 ma2
+    #     "BAG_2026-01-11-09-03-13_10152-extractor.csv", #idx=13 #0111-152 ma1 33.39kg, 104.64min
+    #     "BAG_2026-01-11-15-17-52_10152-extractor.csv", #idx=14 #0111-152 ma2 32.16kg, 111.19min
 
-        "BAG_2026-01-06-10-14-08_10258-extractor.csv", #idx=3 # 0106-258 ma1 36.79kg 94.26min
-        "BAG_2026-01-06-14-06-05_10258-extractor.csv", #idx=4 # 0106-258 ma2 37.51kg, 95.74min
+    #     "BAG_2026-01-09-09-09-08_10152-extractor.csv", # idx=15 #0109-152 ma1 31.36kg, 110.08min
+    #     "BAG_2026-01-09-16-10-20_10152-extractor.csv", # idx=16 #0109-152 ma2 37.34kg, 103.07min
 
-        "BAG_2026-01-07-07-57-27_10257-extractor.csv", #idx=5 #0107-257 ma1 35.66kg, 89.99min
-        "BAG_2026-01-07-08-02-33_10258-extractor.csv", #idx=6 #0107-258 ma1 35.54kg, 90.25min
-        "BAG_2026-01-07-13-23-06_10258-extractor.csv", #idx=7 # 0107-258 ma2, need to merge, cannot merge, idx 7 and 8 has different number of columns...
-        "BAG_2026-01-07-16-01-10_10258-extractor.csv", #idx=8 # combined with idx=7, 0107-258, 40.65kg, 99.07min
-        "BAG_2026-01-07-16-16-43_10257-extractor.csv", #idx=9 ma2 0107-257, need to combined with idx=5, ma2 39.73kg 99.71min
-        "BAG_2026-01-08-16-22-16_10258-extractor.csv", #idx=10 useless
-        "BAG_2026-01-08-18-44-25_10258-extractor.csv", #idx=11 useless
-        "BAG_2026-01-09-08-48-59_10151-extractor.csv", #idx=12 #0109-151 ma1, 31.38kg, 110.06min
-        # missing 151 ma2
-        "BAG_2026-01-11-09-03-13_10152-extractor.csv", #idx=13 #0111-152 ma1 33.39kg, 104.64min
-        "BAG_2026-01-11-15-17-52_10152-extractor.csv", #idx=14 #0111-152 ma2 32.16kg, 111.19min
-        "BAG_2026-01-09-09-09-08_10152-extractor.csv", # idx=15 #0109-152 ma1 31.36kg, 110.08min
-        "BAG_2026-01-09-16-10-20_10152-extractor.csv", # idx=16 #0109-152 ma2 37.34kg, 103.07min
-        "BAG_2026-01-11-09-36-40_10151-extractor.csv", #idx=17 0111-151 ma1 33.6kg, 105.35min; ma2 32.18kg, 110.41min
-        "BAG_2026-01-13-09-13-31_10151-extractor.csv", #idx=18 0113-151 ma1 34.49kg, 91.9min; ma2 37.65kg, 96.70min
-        ## The above is recorded.
-        
-        "BAG_2026-01-13-09-29-25_10152-extractor.csv", #idx=19 0113-152 ma1, 34.38kg, 91.37min
-        "BAG_2026-01-13-14-19-16_10152-extractor.csv", #idx=20 0113-152 ma2, 37.62kg, 96.04min
+    #     "BAG_2026-01-11-09-36-40_10151-extractor.csv", #idx=17 0111-151 ma1 33.6kg, 105.35min; ma2 32.18kg, 110.41min
+    #     "BAG_2026-01-13-09-13-31_10151-extractor.csv", #idx=18 0113-151 ma1 34.49kg, 91.9min; ma2 37.65kg, 96.70min
+    #     "BAG_2026-01-13-09-29-25_10152-extractor.csv", #idx=19 0113-152 ma1, 34.38kg, 91.37min
+    #     "BAG_2026-01-13-14-19-16_10152-extractor.csv", #idx=20 0113-152 ma2, 37.62kg, 96.04min
+    #     ## The above is recorded.
+    # ]
+
+    arg_vec = [
+
+        # 1 -----------------
+        (["BAG_2026-01-06-10-11-18_10257-extractor.csv"], "full", "1-ma1-257"), #idx=2 # 0106-257 ma1 36.87kg, 94.56min
+
+        (["BAG_2026-01-06-10-14-08_10258-extractor.csv"], "full", "1-ma1-258"), #idx=3 # 0106-258 ma1 36.79kg 94.26min
+
+        (["BAG_2026-01-06-14-06-05_10258-extractor.csv"], "full", "1-ma2-258"), #idx=4 # 0106-258 ma2 37.51kg, 95.74min
+
+        # 2 ---------------------
+        (["BAG_2026-01-07-07-57-27_10257-extractor.csv"], "full", "2-ma1-257"), #idx=5 #0107-257 ma1 35.66kg, 89.99min
+
+        (["BAG_2026-01-07-16-16-43_10257-extractor.csv", "BAG_2026-01-07-07-57-27_10257-extractor.csv"], "full", "2-ma2-257"), #idx=9 ma2 0107-257, need to combined with idx=5, ma2 39.73kg 99.71min
+
+        (["BAG_2026-01-07-08-02-33_10258-extractor.csv",], "full", "2-ma1-258"), #idx=6 #0107-258 ma1 35.54kg, 90.25min
+
+        (["BAG_2026-01-07-13-23-06_10258-extractor.csv", "BAG_2026-01-07-16-01-10_10258-extractor.csv"], "full", "2-ma2-258"), # idx7-8
+        #idx=7 # 0107-258 ma2, need to merge, cannot merge, idx 7 and 8 has different number of columns. #idx=8 # combined with idx=7, 0107-258, 40.65kg, 99.07min
+
+        # 3 -------------------------
+
+        (["BAG_2026-01-09-08-48-59_10151-extractor.csv",], "full", "3-ma1-151"), #idx=12 #0109-151 ma1, 31.38kg, 110.06min
+        (["BAG_2026-01-09-09-09-08_10152-extractor.csv",], "full", "3-ma1-152"), # idx=15 #0109-152 ma1 31.36kg, 110.08min
+
+        (["BAG_2026-01-09-16-10-20_10152-extractor.csv",], "full", "3-ma2-152"), # idx=16 #0109-152 ma2 37.34kg, 103.07min
+
+        # 4 -----------------------------
+
+        (["BAG_2026-01-11-09-03-13_10152-extractor.csv",], "full", "4-ma1-152"), #idx=13 #0111-152 ma1 33.39kg, 104.64min
+        (["BAG_2026-01-11-09-36-40_10151-extractor.csv",], "ma1", "4-ma1-151"), #idx=17 0111-151 ma1 33.6kg, 105.35min; ma2 32.18kg, 110.41min
+
+        (["BAG_2026-01-11-09-36-40_10151-extractor.csv",], "ma2", "4-ma2-151"), #idx=17 0111-151 ma1 33.6kg, 105.35min; ma2 32.18kg, 110.41min
+
+        (["BAG_2026-01-11-15-17-52_10152-extractor.csv",], "full", "4-ma2-152"), #idx=14 #0111-152 ma2 32.16kg, 111.19min
+
+        # 5 -----------------------------
+        (["BAG_2026-01-13-09-13-31_10151-extractor.csv",], "ma1", "5-ma1-151"), #idx=18 0113-151 ma1 34.49kg, 91.9min; ma2 37.65kg, 96.70min
+        (["BAG_2026-01-13-09-13-31_10151-extractor.csv",], "ma2", "5-ma2-151"), #idx=18 0113-151 ma1 34.49kg, 91.9min; ma2 37.65kg, 96.70min
+
+        (["BAG_2026-01-13-09-29-25_10152-extractor.csv",], "full", "5-ma1-152"), #idx=19 0113-152 ma1, 34.38kg, 91.37min
+        (["BAG_2026-01-13-14-19-16_10152-extractor.csv",], "full", "5-ma2-152"), #idx=20 0113-152 ma2, 37.62kg, 96.04min
 
     ]
+
     # print(csv_files1)
-    csv_files1 = [csv_files_all[i] for i in [5]]
+    # csv_files1 = [csv_files_all[i] for i in [15]]
     # file_path = os.path.join(data_dir, csv_file)
-    cut_flag = ["full", "ma1", "ma2"][0]
-    analyze_one_csv(data_dir, csv_files1, cut_flag=cut_flag)
+    # cut_flag = ["full", "ma1", "ma2"][0]
+    for i in range(len(arg_vec)):
+    # for i in [3]:
+        csv_files1, cut_flag, name = arg_vec[i]
+        print("*"*80)
+        print(name)
+        analyze_one_csv(data_dir, csv_files1, cut_flag=cut_flag)
     # for csv_file in csv_files:
     #     file_path = os.path.join(data_dir, csv_file)
     #     analyze_one_csv(file_path, csv_file, data_dir)
