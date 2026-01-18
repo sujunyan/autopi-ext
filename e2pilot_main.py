@@ -27,9 +27,6 @@ import route_matcher
 logging.getLogger("j1939").setLevel(logging.DEBUG)
 logging.getLogger("can").setLevel(logging.DEBUG)
 
-# USE_1939 = True
-# Use location simulation mode
-
 
 class E2PilotAutopi:
     def __init__(self, virtual_sim_mode=False, obd_mode="UDS"):
@@ -43,7 +40,7 @@ class E2PilotAutopi:
        
 
         # If true, we will simulate by publishing virtual location messages on mqtt
-        self.virtual_sim_mode = VIRTUAL_SIMULATION_MODE
+        self.virtual_sim_mode = virtual_sim_mode
         if self.virtual_sim_mode:
             logger.info("Using virtual simulation mode for location...")
 
@@ -409,7 +406,7 @@ def main():
     # VIRTUAL_SIMULATION_MODE = True
     # OBD_MODE = ["J1939", "OBD2", "UDS"][2]
 
-    if VIRTUAL_SIMULATION_MODE:
+    if args.virtual_sim_mode:
         config_logger(logging.INFO)
     else:
         config_logger(logging.INFO)

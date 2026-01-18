@@ -98,7 +98,7 @@ class UdsListener(Listener):
         if not self.enable:
             return
 
-        DEBUG = True
+        DEBUG = False
         try:
             if DEBUG:
                 d = {"speed" : 72}
@@ -202,7 +202,6 @@ if __name__ == "__main__":
 
     time.sleep(100)
     ls.close()
-    pass
 
 # with Client(connection, config=config) as client:
 #     print("开始轮询车辆数据... 按 Ctrl+C 停止")
