@@ -390,6 +390,7 @@ def analyze_one_csv(data_dir, csv_files, cut_flag = "full"):
     print(f"Total Travel Time: {total_time/60.0:.2f} min")
     print(f"Relax Time: {relax_time/60.0:.2f} min")
     print(f"Active Travel Time: {active_time/60.0:.2f} min")
+    print(f"Avg Speed: {120.0 / active_time * 3600.0} km/h")
 
 
     for ax in axes:
@@ -640,19 +641,29 @@ def run_analysis(data_dir):
     csv_df.to_csv(summary_filepath, index=False)
     print(summary_filepath)
 
-def plot_summary(data_dir):
+def plot_summary(summary_filepath):
     df = pd.read_csv(summary_filepath)
     distance = 120.0
     df["fuel_by_100km"] = df["adjust_fuel"] / distance * 100
+    # df["fuel_by_100km"] = df["total_fuel"] / distance * 100
     df["avg_fuel"] = df["fuel_by_100km"] / df["weight"]
     df["speed"] = distance / (df["active_time"] / 3600.0)
+
     fig, ax = plt.subplots()
 
-    ax.set_xlabel("平均速度 (km/h)")
-    ax.set_ylabel("平均气耗 (kg/100km/ton)")
 
     fig.set_size_inches((4.8, 4.0))
 
+    plot_summary_scatter(ax, df)
+    
+
+    fig.tight_layout()
+    output_plot = os.path.join(data_dir, "figs", f"summary_analysis.png")
+    fig.savefig(output_plot, dpi=400)
+    plt.close(fig)
+    print(f"Saved summary plot to {output_plot}")
+
+def plot_summary_scatter(ax, df):
     front_back = "front"
     for (direction, eco_nav), group in df.groupby(["direction", "eco_nav", ]):
     # for (direction, eco_nav, front_back), group in df.groupby(["direction", "eco_nav", "front_back"]):
@@ -674,17 +685,12 @@ def plot_summary(data_dir):
         # color = color_dark 
         marker = '>' if direction == 'ma1' else '<'
         # edgecolor = 'red' if front_back == '前车' else 'black'
-        plt.scatter(x, y, label=label, color=color, marker=marker, alpha=0.7, s=64,)
-    
+        ax.scatter(x, y, label=label, color=color, marker=marker, alpha=0.7, s=64,)
 
-    plt.legend(bbox_to_anchor=(0.5, 1), loc='lower center', ncol=2)
-
+    ax.set_xlabel("平均速度 (km/h)")
+    ax.set_ylabel("平均气耗 (kg/100km/ton)")
+    ax.legend(bbox_to_anchor=(0.5, 1), loc='lower center', ncol=2)
     ax.grid(ls="--")
-    fig.tight_layout()
-    output_plot = os.path.join(data_dir, "figs", f"summary_analysis.png")
-    fig.savefig(output_plot, dpi=400)
-    plt.close(fig)
-    print(f"Saved summary plot to {output_plot}")
 
 
 def run_analysis_uds():
@@ -702,7 +708,7 @@ def run_analysis_uds():
         ["20260117_0935_uds_raw_data.csv",], #idx=2, ma1
         ["20260117_1543_uds_raw_data.csv", "20260117_1616_uds_raw_data.csv",], #idx=3, ma2
     ]
-    csv_files1 = csv_files_list[3]
+    csv_files1 = csv_files_list[2]
 
 
     cut_flag = ["full", "ma1", "ma2"][0]
@@ -718,5 +724,5 @@ if __name__ == "__main__":
     matplotlib.rc("font", family='Songti SC')
     if False:
         run_analysis(data_dir)
-    run_analysis_uds()
-    # plot_summary(data_dir)
+    # run_analysis_uds()
+    plot_summary(summary_filepath)
