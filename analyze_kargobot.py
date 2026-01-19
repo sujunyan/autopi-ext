@@ -239,15 +239,47 @@ def load_kargobot_data(file_path):
 
     return df
         
-def analyze_one_csv(data_dir, csv_files, cut_flag = "full"):
+
+def analyze_one_fuel(data_dir, csv_files):
     """
-    Process a single CSV file, calculate physics, and generate subplots.
-
-    cut_flag: if full, do nothing, if ma1, cut the df and remain the first half, if ma2, cut the df and remain the second half
+    Process a list of CSV files
     """
+    df = merge_csv_files(data_dir, csv_files) 
 
-    ret_dict = {}
+    kj_per_kg = 49e6 / 1000.0 # 50MJ per kg
 
+    # convert to kW
+
+    mask = (df["front_axle_spd-kph"] > 0.0)  & (df["fuel_rate"] > 0.0)
+    df = df[mask]
+
+    fuel_rate = df["fuel_rate"] / 3600.0 * kj_per_kg
+    df = calculate_physics_components(df, g_vehicle_params)
+    
+    power_engine = df["power_engine"] / 1000.0
+
+    eff = power_engine / fuel_rate
+    fig, ax = plt.subplots()
+    fig.set_size_inches(5, 4)
+    ax.scatter(power_engine, eff, alpha=0.5, s=1)
+    ax.set_xlabel("Engine Power (kW)")
+    ax.set_ylabel("Fuel Efficiency")
+    ax.set_ylim(0.20, 0.55)
+    fig.tight_layout()
+
+    fig_path = os.path.join(data_dir, "figs", "fuel_efficiency_scatter.png")
+    fig.savefig(fig_path)
+    print(f"Saved fuel efficiency scatter plot to {fig_path}")
+
+
+    plt.close(fig)
+    
+
+def analyze_fuel(data_dir,):
+    csv_files1 = ["BAG_2026-01-06-10-11-18_10257-extractor.csv"]
+    analyze_one_fuel(data_dir, csv_files1)
+
+def merge_csv_files(data_dir, csv_files):
     dfs = []
     for fname in csv_files:
         file_path = os.path.join(data_dir, fname)
@@ -256,6 +288,17 @@ def analyze_one_csv(data_dir, csv_files, cut_flag = "full"):
     merged_df = pd.concat(dfs, ignore_index=True)
     merged_df = merged_df.sort_values('timestamp').reset_index(drop=True)
     df = merged_df.copy()
+    return df
+
+def analyze_one_csv(data_dir, csv_files, cut_flag = "full"):
+    """
+    Process a list of CSV files, merge them, calculate physics, and generate subplots.
+
+    cut_flag: if full, do nothing, if ma1, cut the df and remain the first half, if ma2, cut the df and remain the second half
+    """
+
+    ret_dict = {}
+    df = merge_csv_files(data_dir, csv_files)
 
 
     if cut_flag == "ma1":
@@ -416,7 +459,7 @@ def get_relax_df(df):
     rest_ends = []
     i = 0
     while i < len(spd):
-        if spd[i] < 1.0:
+        if spd[i] < 5.0:
             start = i
             # 向后查找第一个>=60的点
             end = start
@@ -427,6 +470,9 @@ def get_relax_df(df):
             i = end  # 跳到休息段结束后继续
         else:
             i += 1
+
+    print(len(rest_starts), "rest periods found.")
+    print(rest_starts)
 
     # 构造mask，True为非休息段
     mask = np.zeros(len(df), dtype=bool)
@@ -517,7 +563,6 @@ def estimate_and_test_model():
     plt.close()
     print(f"Saved model comparison plot to {output_plot}")
 
-
 def run_analysis(data_dir):
     """
     Main entry point for data analysis and model estimation.
@@ -577,36 +622,39 @@ def run_analysis(data_dir):
 
         # 2 ---------------------
         (["BAG_2026-01-07-07-57-27_10257-extractor.csv"], "full", "2-ma1-257"), #idx=5 #0107-257 ma1 35.66kg, 89.99min
-
-        (["BAG_2026-01-07-16-16-43_10257-extractor.csv", "BAG_2026-01-07-07-57-27_10257-extractor.csv"], "ma2", "2-ma2-257"), #idx=9 ma2 0107-257, need to combined with idx=5, ma2 39.73kg 99.71min
-
         (["BAG_2026-01-07-08-02-33_10258-extractor.csv",], "full", "2-ma1-258"), #idx=6 #0107-258 ma1 35.54kg, 90.25min
 
+        (["BAG_2026-01-07-16-16-43_10257-extractor.csv", "BAG_2026-01-07-07-57-27_10257-extractor.csv"], "ma2", "2-ma2-257"), #idx=9 ma2 0107-257, need to combined with idx=5, ma2 39.73kg 99.71min
         (["BAG_2026-01-07-13-23-06_10258-extractor.csv", "BAG_2026-01-07-16-01-10_10258-extractor.csv"], "full", "2-ma2-258"), # idx7-8
         #idx=7 # 0107-258 ma2, need to merge, cannot merge, idx 7 and 8 has different number of columns. #idx=8 # combined with idx=7, 0107-258, 40.65kg, 99.07min
 
         # 3 -------------------------
-
         (["BAG_2026-01-09-08-48-59_10151-extractor.csv",], "full", "3-ma1-151"), #idx=12 #0109-151 ma1, 31.38kg, 110.06min
         (["BAG_2026-01-09-09-09-08_10152-extractor.csv",], "full", "3-ma1-152"), # idx=15 #0109-152 ma1 31.36kg, 110.08min
 
         (["BAG_2026-01-09-16-10-20_10152-extractor.csv",], "full", "3-ma2-152"), # idx=16 #0109-152 ma2 37.34kg, 103.07min
 
         # 4 -----------------------------
-
-        (["BAG_2026-01-11-09-03-13_10152-extractor.csv",], "full", "4-ma1-152"), #idx=13 #0111-152 ma1 33.39kg, 104.64min
         (["BAG_2026-01-11-09-36-40_10151-extractor.csv",], "ma1", "4-ma1-151"), #idx=17 0111-151 ma1 33.6kg, 105.35min; ma2 32.18kg, 110.41min
+        (["BAG_2026-01-11-09-03-13_10152-extractor.csv",], "full", "4-ma1-152"), #idx=13 #0111-152 ma1 33.39kg, 104.64min
 
         (["BAG_2026-01-11-09-36-40_10151-extractor.csv",], "ma2", "4-ma2-151"), #idx=17 0111-151 ma1 33.6kg, 105.35min; ma2 32.18kg, 110.41min
-
         (["BAG_2026-01-11-15-17-52_10152-extractor.csv",], "full", "4-ma2-152"), #idx=14 #0111-152 ma2 32.16kg, 111.19min
 
         # 5 -----------------------------
         (["BAG_2026-01-13-09-13-31_10151-extractor.csv",], "ma1", "5-ma1-151"), #idx=18 0113-151 ma1 34.49kg, 91.9min; ma2 37.65kg, 96.70min
-        (["BAG_2026-01-13-09-13-31_10151-extractor.csv",], "ma2", "5-ma2-151"), #idx=18 0113-151 ma1 34.49kg, 91.9min; ma2 37.65kg, 96.70min
-
         (["BAG_2026-01-13-09-29-25_10152-extractor.csv",], "full", "5-ma1-152"), #idx=19 0113-152 ma1, 34.38kg, 91.37min
+
+        (["BAG_2026-01-13-09-13-31_10151-extractor.csv",], "ma2", "5-ma2-151"), #idx=18 0113-151 ma1 34.49kg, 91.9min; ma2 37.65kg, 96.70min
         (["BAG_2026-01-13-14-19-16_10152-extractor.csv",], "full", "5-ma2-152"), #idx=20 0113-152 ma2, 37.62kg, 96.04min
+
+        # 7 -------------------------------
+        (["BAG_2026-01-17-09-09-01_10151-extractor.csv",], "full", "7-ma1-151"), 
+        (["BAG_2026-01-17-09-07-05_10152-extractor.csv",], "full", "7-ma1-152"), 
+
+        (["BAG_2026-01-17-14-11-33_10151-extractor.csv",], "full", "7-ma2-151"),
+        (["BAG_2026-01-17-14-22-09_10152extractor.csv",], "full", "7-ma2-152"),
+        
 
     ]
 
@@ -615,8 +663,9 @@ def run_analysis(data_dir):
     # file_path = os.path.join(data_dir, csv_file)
     # cut_flag = ["full", "ma1", "ma2"][0]
     ret_dict_list = []
+    n = len(arg_vec)
     for i in range(len(arg_vec)):
-    # for i in [0, 1, 2, 3, 4, 5, 7, 8]:
+    # for i in [n-2, n-1]:
         csv_files1, cut_flag, name = arg_vec[i]
         print("*"*80)
         print(name)
@@ -630,7 +679,7 @@ def run_analysis(data_dir):
             ret_dict["front_back"] = "front"
         else:
             ret_dict["front_back"] = "back"
-        if trip_idx in ["3", "4"]:
+        if trip_idx in ["3", "4", "6"]:
             ret_dict["eco_nav"] = True
         else:
             ret_dict["eco_nav"] = False
@@ -732,7 +781,6 @@ def plot_summary_scatter(ax, df):
     ax.legend(bbox_to_anchor=(0.5, 1), loc='lower center', ncol=2)
     ax.grid(ls="--")
 
-
 def run_analysis_uds():
     """
     Run analysis for the UDS data obtained directly from OBD port by ourselves.
@@ -762,7 +810,8 @@ if __name__ == "__main__":
     summary_filepath = os.path.join(data_dir, "kargobot_summary.csv")
     matplotlib.use("Agg")  # Use non-interactive backend
     matplotlib.rc("font", family='Songti SC')
-    if False:
+    if True:
         run_analysis(data_dir)
+    # analyze_fuel(data_dir)
     # run_analysis_uds()
     plot_summary(summary_filepath)
