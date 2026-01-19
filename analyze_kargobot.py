@@ -666,16 +666,38 @@ def plot_summary(summary_filepath):
 
 def plot_summary_bar(ax, df):
     # Bar plot: average fuel grouped by direction and eco_nav
-
     grouped = df.groupby(['direction', 'eco_nav'])['avg_fuel'].mean().reset_index()
-   
 
-    grouped['label'] = grouped.apply(lambda row: f"{row['direction']} - {'Eco' if row['eco_nav'] else 'Non-Eco'}", axis=1)
-    ax.bar(grouped['label'], grouped['avg_fuel'], color='skyblue')
-    ax.set_xlabel('Average Fuel (kg/100km/ton)')
-    ax.set_ylabel('Direction - Eco Nav')
-    ax.set_title('Average Fuel by Direction and Eco Navigation')
-    ax.grid(axis='y', ls="--", alpha=0.7)
+    unique_directions = grouped['direction'].unique()
+    x_positions = []
+    values = []
+    colors = []
+    bar_labels = []
+
+    for i, direction in enumerate(unique_directions):
+        for j, eco in enumerate([False, True]):  # False first (司机驾驶), then True (节能驾驶)
+            x_pos = i * 2.5 + j  # Closer grouping, space for direction labels
+            x_positions.append(x_pos)
+            val = grouped[(grouped['direction'] == direction) & (grouped['eco_nav'] == eco)]['avg_fuel']
+            values.append(val.values[0] if len(val) > 0 else 0)
+            colors.append(g_blue_dark if not eco else g_green_dark)
+            bar_labels.append(f"{'司机驾驶' if not eco else '节能驾驶'}")
+
+    bars = ax.bar(x_positions, values, color=colors, width=0.65, linewidth=0.5, edgecolor='black', alpha=0.7)
+
+    # Add value labels on top of bars
+    for bar in bars:
+        height = bar.get_height()
+        ax.text(bar.get_x() + bar.get_width() / 2, height, f'{height:.3f}', ha='center', va='bottom', fontsize=9)
+
+    ax.set_ylabel('平均气耗 (kg/100km/ton)')
+    ax.set_xticks([i * 2.5 + 0.5 for i in range(len(unique_directions))])
+    ax.set_xticklabels([f"{'去程' if d == 'ma1' else '回程'}" for d in unique_directions])
+    # ax.grid(axis='y', ls="--", alpha=0.7)
+
+    # Legend for bar types
+    handles = [bars[0], bars[1]]  # First two bars are examples
+    ax.legend(handles, ['司机驾驶', '节能驾驶'], loc='upper right', fontsize=9)
 
 def plot_summary_scatter(ax, df):
     """
