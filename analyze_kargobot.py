@@ -16,6 +16,10 @@ g_vehicle_params = {
     "max_torque_nm": 2500.0,
     "gravity_ms2": 9.81,
 }
+g_green_dark = '#228B22'  # 深绿色
+g_green_light = '#90EE90' # 浅绿色
+g_blue_dark = '#00008B'  # 深蓝色
+g_blue_light = '#87CEFA' # 浅蓝色
 
 def nonlinear_model(X, p1, p2, p3, p4, p5):
     """
@@ -649,13 +653,10 @@ def plot_summary(summary_filepath):
     df["avg_fuel"] = df["fuel_by_100km"] / df["weight"]
     df["speed"] = distance / (df["active_time"] / 3600.0)
 
-    fig, ax = plt.subplots()
+    fig, axes = plt.subplots(2, 1, figsize=(6, 8))
 
-
-    fig.set_size_inches((4.8, 4.0))
-
-    plot_summary_scatter(ax, df)
-    
+    plot_summary_scatter(axes[0], df)
+    plot_summary_bar(axes[1], df)
 
     fig.tight_layout()
     output_plot = os.path.join(data_dir, "figs", f"summary_analysis.png")
@@ -663,7 +664,24 @@ def plot_summary(summary_filepath):
     plt.close(fig)
     print(f"Saved summary plot to {output_plot}")
 
+def plot_summary_bar(ax, df):
+    # Bar plot: average fuel grouped by direction and eco_nav
+
+    grouped = df.groupby(['direction', 'eco_nav'])['avg_fuel'].mean().reset_index()
+   
+
+    grouped['label'] = grouped.apply(lambda row: f"{row['direction']} - {'Eco' if row['eco_nav'] else 'Non-Eco'}", axis=1)
+    ax.bar(grouped['label'], grouped['avg_fuel'], color='skyblue')
+    ax.set_xlabel('Average Fuel (kg/100km/ton)')
+    ax.set_ylabel('Direction - Eco Nav')
+    ax.set_title('Average Fuel by Direction and Eco Navigation')
+    ax.grid(axis='y', ls="--", alpha=0.7)
+
 def plot_summary_scatter(ax, df):
+    """
+    Plot the scatter for each data point
+    """
+
     front_back = "front"
     for (direction, eco_nav), group in df.groupby(["direction", "eco_nav", ]):
     # for (direction, eco_nav, front_back), group in df.groupby(["direction", "eco_nav", "front_back"]):
@@ -675,11 +693,11 @@ def plot_summary_scatter(ax, df):
         # label += "|" + ("前车" if front_back == "front" else "后车")
         # label = f"{direction} | {eco_nav} | {front_back}"
         if eco_nav == True:
-            color_dark = '#228B22'  # 深绿色
-            color_light = '#90EE90' # 浅绿色
+            color_dark = g_green_dark  # 深绿色
+            color_light = g_green_light # 浅绿色
         else:
-            color_dark = '#00008B'  # 深蓝色
-            color_light = '#87CEFA' # 浅蓝色
+            color_dark = g_blue_dark  # 深蓝色
+            color_light = g_blue_light # 浅蓝色
         color = color_dark if front_back == 'front' else color_light
         # color = 'green' if eco_nav == '节能导航' else 'blue'
         # color = color_dark 
