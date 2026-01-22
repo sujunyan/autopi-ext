@@ -90,8 +90,8 @@ class DisplayManager:
             self.set_follow_range(0.0)
             self.set_follow_rate(0.0)
             self.set_distance(0.0)
-            self.set_suggest_speed(60.0)
-            self.set_speed(60.0)
+            self.set_suggest_speed(80.0)
+            self.set_speed(80.0)
 
     def setup_serial(self):
         logger.info("Setup serial port for display manager")
@@ -183,6 +183,6 @@ class DisplayManager:
         logger.info("[display manager] Closing...")
         self.reset_display()
         time.sleep(0.2)
-        if self.ser is not None and self.ser.is_open:
+        if hasattr(self, 'ser') and (self.ser is not None) and self.ser.is_open:
             self.ser.close()
         logger.info("[display manager] Closed.")

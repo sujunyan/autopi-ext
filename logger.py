@@ -54,7 +54,7 @@ def config_logger(level=logging.INFO):
     debug_handler = logging.handlers.RotatingFileHandler(
         debug_log_filepath,
         maxBytes= 3 * 1024 * 1024,
-        backupCount=10
+        backupCount=20
     )
     debug_handler.setFormatter(formatter)
     debug_handler.setLevel(logging.DEBUG)

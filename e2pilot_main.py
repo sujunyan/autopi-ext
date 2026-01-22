@@ -29,7 +29,7 @@ logging.getLogger("can").setLevel(logging.DEBUG)
 
 
 class E2PilotAutopi:
-    def __init__(self, virtual_sim_mode=False, obd_mode="UDS"):
+    def __init__(self, virtual_sim_mode=False, obd_mode="UDS", no_display=True):
         self.obd_mode = obd_mode
         if self.obd_mode == "J1939":
             self.obd_listener = J1939Listener()
@@ -37,6 +37,8 @@ class E2PilotAutopi:
             self.obd_listener = Obd2Listener()
         elif self.obd_mode == "UDS":
             self.obd_listener = UdsListener()
+
+        self.no_display = no_display
        
 
         # If true, we will simulate by publishing virtual location messages on mqtt
@@ -82,7 +84,10 @@ class E2PilotAutopi:
 
 
         self.obd_listener.setup()
-        self.display_manager.setup(); 
+        if self.no_display:
+            logger.warning("Disable display manager")
+        else:
+            self.display_manager.setup(); 
         # logger.warning("Disable display manager and OBD listener.")
         self.setup_mqtt_speed_client()
         self.setup_mqtt_location_client()
@@ -119,9 +124,9 @@ class E2PilotAutopi:
             # Slow down and filter the heartbeat msg
             if not self.virtual_sim_mode:
                 if self.current_speed < 1.0:
-                    self.heart_beat_delta = 10
+                    self.heart_beat_delta = 2.5
                 elif self.current_speed < 5.0:
-                    self.heart_beat_delta = 5
+                    self.heart_beat_delta = 2.5
                 else:
                     self.heart_beat_delta = 2
 
@@ -284,6 +289,7 @@ class E2PilotAutopi:
                 if data["lat"] != 0 and data["lon"] != 0:
                     self.lat = data["lat"]
                     self.lon = data["lon"]
+                logger.debug(f"Got h11gps/position {data}")
             elif msg.topic == "track/pos":
                 self.last_embed_gps_time = time.time()
                 if not self.is_h11_alive():
@@ -311,6 +317,9 @@ class E2PilotAutopi:
         )
             
         pt = self.route_matcher.update_pt(self.lat, self.lon)
+
+        if pt == None:
+            return
 
         sug_spd, g = self.route_matcher.get_suggest_speed_and_grade()
         if sug_spd >= 0:
@@ -395,8 +404,10 @@ def parse_args():
     parser = argparse.ArgumentParser(description="E2PilotAutopi Main")
     parser.add_argument("--obd_mode", choices=["J1939", "OBD2", "UDS"], default="UDS", help="OBD mode to use")
     parser.add_argument("--virtual_sim_mode", action="store_true", help="Enable virtual simulation mode")
+    parser.add_argument("--no_display", action="store_true", help="disable the display")
     parser.add_argument("--no-virtual_sim_mode", dest="virtual_sim_mode", action="store_false", help="Disable virtual simulation mode")
     parser.set_defaults(virtual_sim_mode=False)
+    parser.set_defaults(no_display=False)
     return parser.parse_args()
 
 def main():
@@ -417,8 +428,12 @@ def main():
     logger.info("E2Pilot application with args: " + str(args))
 
     app = None
+    no_display = args.no_display
     try:
-        app = E2PilotAutopi(virtual_sim_mode=args.virtual_sim_mode, obd_mode=args.obd_mode)
+        app = E2PilotAutopi(
+            virtual_sim_mode=args.virtual_sim_mode, 
+            obd_mode=args.obd_mode,
+            no_display=no_display)
         app.setup()
         app.main_loop()
     except can.exceptions.CanError as e:

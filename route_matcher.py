@@ -51,11 +51,11 @@ route_name_subset = [
 
     ## Below all have max_spd = 85kmh
     # "test.2026-01-12_merged_gps_ma1_41000.0kg_70kmh.opt.JuMP.route.json",
-    "test.2026-01-12_merged_gps_ma1_41000.0kg_75kmh.opt.JuMP.route.json", # default ma1
+    # "test.2026-01-12_merged_gps_ma1_41000.0kg_75kmh.opt.JuMP.route.json", # default ma1
     # "test.2026-01-12_merged_gps_ma1_41000.0kg_80kmh.opt.JuMP.route.json",
     # "test.2026-01-12_merged_gps_ma2_41000.0kg_70kmh.opt.JuMP.route.json",
     # "test.2026-01-12_merged_gps_ma2_41000.0kg_75kmh.opt.JuMP.route.json", # default ma2
-    # "test.2026-01-12_merged_gps_ma2_41000.0kg_80kmh.opt.JuMP.route.json",
+    "test.2026-01-12_merged_gps_ma2_41000.0kg_80kmh.opt.JuMP.route.json",
 ]
 
 
@@ -116,8 +116,14 @@ class RouteMatcher:
         Update the current closest point based on the given latitude and longitude.
         """
         # pt = self.find_closest_speedplan_point(lat, lon)
-        self.pt = self.match_solution(lat, lon)
+        pt = self.match_solution(lat, lon)
+        if pt == None:
+            return None
+
+        self.pt = pt
+
         self.latlon = (lat, lon)
+
         return self.pt
 
     def match_solution(self, lat, lon) -> Optional[Dict[str, Any]]:
@@ -130,6 +136,13 @@ class RouteMatcher:
             return None
 
         if not self.all_speedplan_points:
+            return None
+
+        if not hasattr(self, "match_in_progress") or self.match_in_progress == False:
+            logger.debug("Matching not in progress, start a new matching.")
+            self.match_in_progress = True
+        elif self.match_in_progress:
+            logger.debug("Matching in progress, skip this mathcing callback.")
             return None
 
         def find_best_in_range(index_range):
@@ -221,7 +234,10 @@ class RouteMatcher:
                     f"Got a index in the route: cur={self.current_pt_index}, next={best_idx}, distance: {min_dist:.3f}m"
                 )
             self.current_pt_index = best_idx
+            self.match_in_progress = False
             return self.all_speedplan_points[best_idx]
+        
+        self.match_in_progress = False
 
         return None
 
