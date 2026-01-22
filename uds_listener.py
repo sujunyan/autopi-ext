@@ -98,6 +98,12 @@ class UdsListener(Listener):
         if not self.enable:
             return
 
+        if not self.uds_client.conn.is_open():
+            return
+        
+        if not self.connection.is_open():
+            return
+
         DEBUG = False
         try:
             if DEBUG:
@@ -128,9 +134,9 @@ class UdsListener(Listener):
             time.sleep(1)
 
     def close(self):
+        super().close()
         self.uds_client.close()
         self.connection.close()
-        super().close()
 
 # 0x013F
 class FuelCodec(udsoncan.DidCodec):
