@@ -95,7 +95,7 @@ class E2PilotAutopi:
 
         if not self.virtual_sim_mode:
             self.h11_listener.setup()
-            self.embed_gps_listener.setup()
+            # self.embed_gps_listener.setup()
 
         self.embed_acc_listener.setup()
        

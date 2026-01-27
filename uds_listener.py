@@ -147,7 +147,7 @@ class FuelCodec(udsoncan.DidCodec):
         s = " ".join(f"{b:02X}" for b in payload)
         fuel_rate = struct.unpack('>H', payload)[0] * 0.05
         # logger.info(f"Got data {s} len={len(payload)} fuel_rate={fuel_rate}")
-        logger.debug(f"fuel_rate={fuel_rate}")
+        # logger.debug(f"fuel_rate={fuel_rate}")
         d = {
             'fuel_rate' : fuel_rate # unit kg/L
         }
@@ -165,7 +165,7 @@ class FuelLevelCodec(udsoncan.DidCodec):
         s = " ".join(f"{b:02X}" for b in payload)
         fuel_level = payload[11] * 0.4
         # logger.info(f"Got data {s} len={len(payload)} fuel_level={fuel_level}")
-        logger.debug(f"fuel_level={fuel_level}")
+        # logger.debug(f"fuel_level={fuel_level}")
         d = {
             "fuel_level" : fuel_level # unit: %
         }
@@ -187,7 +187,7 @@ class EngineCodec(udsoncan.DidCodec):
         torque_perc = payload[38] - 125.0
         speed = struct.unpack('>H', payload[23:25])[0] * 0.00390625
         # logger.info(f"Got data {s} len={len(payload)} rpm={rpm_candidate}, torque_perc={torque_perc}, speed={speed}")
-        logger.debug(f"rpm={rpm_candidate}, torque_perc={torque_perc}, speed={speed}")
+        # logger.debug(f"rpm={rpm_candidate}, torque_perc={torque_perc}, speed={speed}")
         
         d = {
             "rpm" : rpm_candidate,

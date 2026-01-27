@@ -115,7 +115,7 @@ class H11Listener(Listener):
                     self.save_raw_data(line)
                     self.parse_and_publish(line)
             else:
-                time.sleep(0.1)
+                time.sleep(0.05)
         else:
             self.enable = False
 
